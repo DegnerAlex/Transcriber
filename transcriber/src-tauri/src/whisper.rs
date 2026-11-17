@@ -77,6 +77,15 @@ impl WhisperEngine {
                 candidates.push(PathBuf::from(env));
             }
         }
+        // Next to the executable (covers the AppImage layout: the binary is
+        // at AppDir/usr/bin, the models are bundled at AppDir/usr/bin/models).
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                for name in PREFERRED {
+                    candidates.push(exe_dir.join("models").join(name));
+                }
+            }
+        }
         for name in PREFERRED {
             for dir in MODEL_DIRS {
                 candidates.push(PathBuf::from(format!("{dir}/{name}")));

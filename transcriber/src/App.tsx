@@ -30,6 +30,7 @@ interface AppState {
     transcriptLines: string[];
     partial: string | null;
     typeError: string | null;
+    copied: boolean;
 }
 
 interface TranscriptionPayload {
@@ -92,6 +93,7 @@ class App extends Component<Record<string, never>, AppState> {
         transcriptLines: [],
         partial: null,
         typeError: null,
+        copied: false,
     };
 
     componentDidMount(): void {
@@ -298,7 +300,7 @@ class App extends Component<Record<string, never>, AppState> {
                 const column = document.querySelector(".app-column-left");
                 const panel = document.querySelector(".live-panel");
                 invoke("debug_log", {
-                    message: `chat filled: chat h=${Math.round(chat.getBoundingClientRect().height)} scrollH=${chat.scrollHeight} | panel h=${panel ? Math.round(panel.getBoundingClientRect().height) : -1} | column h=${column ? Math.round(column.getBoundingClientRect().height) : -1} colScrollH=${column ? column.scrollHeight : -1}`,
+                    message: `chat filled: chat h=${chat ? Math.round(chat.getBoundingClientRect().height) : -1} scrollH=${chat ? chat.scrollHeight : -1} | panel h=${panel ? Math.round(panel.getBoundingClientRect().height) : -1} | column h=${column ? Math.round(column.getBoundingClientRect().height) : -1} colScrollH=${column ? column.scrollHeight : -1}`,
                 }).catch(() => {});
             }
         }
@@ -620,7 +622,13 @@ class App extends Component<Record<string, never>, AppState> {
                             >
                                 {language}
                             </button>
+                            {languagesError && (
+                                <span className="is-size-7 has-text-danger">{languagesError}</span>
+                            )}
                             <span className="is-size-7 has-text-grey ml-2 mr-2">Model</span>
+                            {modelsError && (
+                                <span className="is-size-7 has-text-danger">{modelsError}</span>
+                            )}
                             <button
                                 type="button"
                                 title="Switch transcription model"
@@ -707,6 +715,9 @@ class App extends Component<Record<string, never>, AppState> {
                                 {copied ? <FaCheck/> : <FaCopy/>}
                             </button>
                         </div>
+                        {typeError && (
+                            <div className="has-text-danger is-size-7">{typeError}</div>
+                        )}
                     </div>
                     <div className="transcript-chat" ref={this.chatRef}>
                         {transcriptLines.length === 0 && !partial && (

@@ -4,15 +4,78 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 
 ## Features
 
-- **Audio capture**:
-  - microphones and other input devices (ALSA via cpal);
-  - **output devices** (sinks) — transcribe what is playing in the system (PipeWire host, monitor capture);
-- **Automatic phrase slicing** — a built-in VAD with an adaptive noise floor; a live draft appears while you are speaking, the final text is appended after ~0.9 s of silence;
-- **On-the-fly model switching** — every `ggml` model found in `models/` is available as a chip in the UI, no restart required;
-- **Language selection** — every language the loaded model supports, plus `auto`;
-- **Sensitivity** (software gain, 0–400 %) and an **auto-insert toggle** (Insert on/off);
-- **Copy-to-clipboard** for the whole transcript (native clipboard plugin);
-- Persistence: device, language, model, sensitivity, the Insert toggle and the transcript survive restarts (localStorage + a JSON file in the app data directory + automatic monitor resume).
+### Audio capture
+
+- **Input devices** — microphones and other capture devices (ALSA host via cpal; ALSA routes are collapsed per physical device, preferring `plughw`);
+- **Output devices** — speakers, headsets, HDMI: select a sink and the app captures whatever is playing through it (PipeWire host, monitor capture) — useful for transcribing calls, videos, meetings;
+- Hot-plug friendly: devices plugged in after the app starts appear after pressing Refresh (bind-mounted `/dev/snd` + a device-cgroup rule for the whole ALSA major);
+- A live oscilloscope (canvas waveform) of the currently monitored stream.
+
+### Transcription
+
+- **Automatic speech-to-text**: a built-in voice activity detector (adaptive noise floor, pre-roll capture, ~0.9 s end-of-speech pause) slices the audio into utterances — no button pressing needed;
+- **Live drafts**: while you are still speaking, a partial transcription of the growing phrase is shown on top of the chat (updated every ~2 s);
+- **Chat-style transcript**: each finalized utterance is a message in a full-height chat column; newest on top, with auto-scroll;
+- **Language selection** — every language the loaded model supports, plus `auto` (see the table below);
+- **On-the-fly model switching** — every `ggml` model found in `models/` is available as a chip in the UI; switching reloads the whisper context without restarting the app (~1 s);
+- **Supported models** — any `ggml` file in `models/`: tiny/base/small/medium/large (incl. quantized q5_0/q5_1/q8_0 variants and large-v3-turbo); switching reloads the whisper context without restarting the app (~1 s).
+
+### Text insertion
+
+- **Auto-insert** — each finalized phrase is typed into whatever application has focus (enigo, X11 XTest); suppressed while the Transcriber window itself is focused, so text never ends up in the app's own UI;
+- **Insert on/off** toggle persisted across restarts;
+- **Copy to clipboard** — the whole transcript in chronological order (native clipboard plugin with web-API and `execCommand` fallbacks);
+- Transcription errors are surfaced as inline notifications.
+
+### Supported languages
+
+99 languages via the whisper language table, selectable per transcription:
+
+| `en` | `zh` | `de` | `es` | `ru` | `ko` | `fr` | `ja` | `pt` | `tr` |
+|---|---|---|---|---|---|---|---|---|---|
+| `pl` | `ca` | `nl` | `ar` | `sv` | `it` | `id` | `hi` | `fi` | `vi` |
+| `he` | `uk` | `el` | `ms` | `cs` | `ro` | `da` | `hu` | `ta` | `no` |
+| `th` | `ur` | `hr` | `bg` | `lt` | `la` | `mi` | `ml` | `cy` | `sk` |
+| `te` | `fa` | `lv` | `bn` | `sr` | `az` | `sl` | `kn` | `et` | `mk` |
+| `br` | `eu` | `is` | `hy` | `ne` | `mn` | `bs` | `kk` | `sq` | `sw` |
+| `gl` | `mr` | `pa` | `si` | `km` | `sn` | `yo` | `so` | `af` | `oc` |
+| `ka` | `be` | `tg` | `sd` | `gu` | `am` | `yi` | `lo` | `uz` | `fo` |
+| `ht` | `ps` | `tk` | `nn` | `mt` | `sa` | `lb` | `my` | `bo` | `tl` |
+| `mg` | `as` | `tt` | `haw` | `ln` | `ha` | `ba` | `jw` | `su` | `yue` |
+
+
+Plus `auto` (language detection). The language is persisted across restarts and applied to every transcription.
+
+
+### GPU acceleration
+
+- whisper.cpp is built with the CUDA backend (`GGML_CUDA`) — transcription runs on the NVIDIA GPU;
+- the runtime CUDA libraries (`libcudart`, `libcublas`, `libcublasLt`) are bundled inside the AppImage; the NVIDIA driver (`libcuda.so`) comes from the target machine;
+- automatic CPU fallback when no GPU device nodes are present (`/dev/nvidia*` detection) or when CUDA initialization fails — the same build runs on GPU-only and CPU-only machines;
+- model loading speed on the reference GPU (GTX 1650 SUPER): ~0.2–0.6 s regardless of model size;
+- the CUDA 13.1 toolkit supports Turing (sm_75) and newer — older GPUs fall back to the CPU.
+
+### Supported GPUs
+
+| Compute capability | Architecture | Example GPUs | Status |
+|---|---|---|---|
+| NVIDIA (sm_75+) | Turing … Blackwell | GTX 16xx, RTX 20xx–50xx, T4, H100 | **supported** — tested on GTX 1650 SUPER |
+| AMD | — | RX series (ROCm not bundled) | **fallback** — runs on the CPU |
+| Intel | — | Arc series | **fallback** — runs on the CPU |
+| CPU | — | any x86_64 machine | **fallback** — supported |
+
+\* pre-Turing NVIDIA cards (Maxwell, Pascal, Volta) are not supported by CUDA 13 — they fall back to the CPU.
+
+On unsupported GPUs the app runs on the CPU automatically (see GPU acceleration above).
+
+### Persistence
+
+Everything survives app restarts and container recreation:
+
+- the selected device (the capture monitor auto-resumes on startup),
+- sensitivity, language, model, the Insert toggle,
+- the whole transcript chat (stored in `transcript.json` inside the app data directory, which is bind-mounted from the host),
+- the chat is not cleared by auto-insert — only by the **Clear** button.
 
 ## Running
 
@@ -63,4 +126,3 @@ Pick one with the chips in the UI (the choice is remembered). On startup the bes
 - [enigo](https://github.com/enigo-rs/enigo) — keyboard input simulation (X11 XTest) for text insertion
 - [serde](https://serde.rs/) / [serde_json](https://github.com/serde-rs/json) — serialization for IPC and the transcript file
 - [rust-pipewire](https://gitlab.freedesktop.org/pipewire/pipewire-rs) / [alsa](https://github.com/diwic/alsa-rs) — pulled in through cpal's backends
-
