@@ -8,7 +8,7 @@ TAURI_DIR := transcriber/src-tauri
 # Deferred (`=`) on purpose: the wildcard must resolve AFTER the build runs,
 # when the freshly built artifact exists.
 APPIMAGE = $(wildcard $(TAURI_DIR)/target/release/bundle/appimage/*.AppImage)
-APPIMAGE_FILE = $(shell find $(TAURI_DIR)/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+APPIMAGE_FILE = $(shell find $(TAURI_DIR)/target/release/bundle/appimage -maxdepth 1 -name 'Transcriber*.AppImage' | head -1)
 
 # App version from tauri.conf.json, used for the GitHub release tag.
 VERSION = $(shell grep -oP '(?<="version": ")[^"]+' $(TAURI_DIR)/tauri.conf.json | head -1)
@@ -66,14 +66,12 @@ clean-all:
 # artifact exists.
 release:
 	@mkdir -p $(DIST)
-	cp "$(APPIMAGE_FILE)" "$(DIST_APPIMAGE)"
-	gh release create v$(VERSION) "$(DIST_APPIMAGE)" \
+	gh release create v$(VERSION) "$(APPIMAGE_FILE)" \
 		--title "Transcriber $(VERSION)" --generate-notes
 	@echo "Release v$(VERSION) published."
 
 # Re-upload the artifact to the existing release, replacing the old file.
 upload:
 	@mkdir -p $(DIST)
-	cp "$(APPIMAGE_FILE)" "$(DIST_APPIMAGE)"
-	gh release upload v$(VERSION) "$(DIST_APPIMAGE)" --clobber
+	gh release upload v$(VERSION) "$(APPIMAGE_FILE)" --clobber
 	@echo "Artifact uploaded to release v$(VERSION)."

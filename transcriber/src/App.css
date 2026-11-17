@@ -50,7 +50,22 @@ section.compact .container {
     flex: 1 1 42%;
     min-width: 0;
     height: 100%;
-    overflow: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* Thin scrollbar for the whole device column (input + output in one) */
+.app-column-right::-webkit-scrollbar {
+    width: 4px;
+}
+
+.app-column-right::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.45);
+    border-radius: 2px;
+}
+
+.app-column-right::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 /* Absolutely positioned inside .app-column-left: the panel is exactly the
@@ -94,23 +109,9 @@ section.compact .container {
     padding: 0;
 }
 
+/* No inner scroll for the input list: the whole column scrolls with a
+   single thin scrollbar covering both lists. */
 .device-list-scroll {
-    max-height: 26vh;
-    overflow-y: auto;
-}
-
-/* Thin scrollbar for the device list */
-.device-list-scroll::-webkit-scrollbar {
-    width: 4px;
-}
-
-.device-list-scroll::-webkit-scrollbar-thumb {
-    background: rgba(127, 127, 127, 0.45);
-    border-radius: 2px;
-}
-
-.device-list-scroll::-webkit-scrollbar-track {
-    background: transparent;
 }
 
 .device-item {
