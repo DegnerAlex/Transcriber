@@ -87,60 +87,154 @@ pub fn list_audio_input_devices() -> Result<Vec<AudioInputDevice>, String> {
     let host = alsa_host()?;
     let default_device = host.default_input_device();
 
+    // (route rank, does a capture config probe successfully) per kept entry.
+    let mut route_meta: Vec<(u8, bool)> = Vec::new();
+    let mut best_by_card: HashMap<String, usize> = HashMap::new();
     let mut devices: Vec<AudioInputDevice> = Vec::new();
-    let mut index_by_name: HashMap<String, usize> = HashMap::new();
 
     for device in host
         .input_devices()
         .map_err(|e| format!("failed to enumerate input devices: {e}"))?
     {
         let description = device.description().map_err(|e| e.to_string())?;
+        let Some(driver) = description.driver() else {
+            continue;
+        };
         // Skip the ALSA "null" pseudo device: it only generates silence and
         // is useful for tests, not for picking a microphone.
-        if description.driver() == Some("null") {
+        if driver == "null" {
             continue;
         }
-        let name = description.name().to_string();
+        // Keep only routes attached to real hardware plus the system
+        // "default" alias. Plugin aliases (rate converters, jack/oss/pulse/
+        // pipewire bridges, upmix/downmix) have no card behind them: they
+        // either need an external server or fail to open, so they never
+        // capture anything useful.
+        if driver != "default" && !driver.contains("CARD=") {
+            continue;
+        }
         let is_default = default_device.as_ref() == Some(&device);
-        let default_config = device.default_input_config().ok().map(|c| AudioInputConfig {
-            channels: c.channels(),
-            sample_rate: c.sample_rate(),
-            sample_format: format!("{:?}", c.sample_format()),
-        });
+        let capture_ok = device.default_input_config().is_ok();
         let entry = AudioInputDevice {
-            name: name.clone(),
-            driver: description.driver().map(str::to_string),
+            name: description.name().to_string(),
+            driver: Some(driver.to_string()),
             manufacturer: description.manufacturer().map(str::to_string),
             device_type: format!("{:?}", description.device_type()),
             interface: format!("{:?}", description.interface_type()),
             is_default,
-            default_config,
+            default_config: device.default_input_config().ok().map(|c| AudioInputConfig {
+                channels: c.channels(),
+                sample_rate: c.sample_rate(),
+                sample_format: format!("{:?}", c.sample_format()),
+            }),
         };
 
-        match index_by_name.get(&name) {
-            Some(&index) => {
-                let prefer_new = entry.driver.as_deref().is_some_and(|d| d.starts_with("plughw"))
-                    && !devices[index]
-                        .driver
-                        .as_deref()
-                        .is_some_and(|d| d.starts_with("plughw"));
-                if prefer_new {
-                    // Keep the "default" flag even when swapping the route.
+        // Collapse the aliases of one physical card (hw, plughw, front,
+        // sysdefault, usbstream, ...) into a single list entry: prefer a
+        // route whose capture config probes successfully, then the most
+        // forgiving route (plughw does automatic format conversion).
+        let card = card_id(driver);
+        // ALSA also lists the same cards by index ("plughw:CARD=0"); those
+        // entries share the human-readable name with the named aliases of
+        // the same physical card, so group them by name instead.
+        let card = if card.chars().all(|c| c.is_ascii_digit()) {
+            entry.name.clone()
+        } else {
+            card
+        };
+        match best_by_card.get(&card).copied() {
+            Some(index) => {
+                if (capture_ok, route_rank(driver)) > (route_meta[index].1, route_meta[index].0) {
                     let mut entry = entry;
                     entry.is_default |= devices[index].is_default;
                     devices[index] = entry;
+                    route_meta[index] = (route_rank(driver), capture_ok);
                 } else {
                     devices[index].is_default |= is_default;
                 }
             }
             None => {
-                index_by_name.insert(name, devices.len());
+                best_by_card.insert(card, devices.len());
                 devices.push(entry);
+                route_meta.push((route_rank(driver), capture_ok));
             }
         }
     }
 
+    // Second pass: named aliases ("plughw:CARD=PCH") and index aliases
+    // ("plughw:CARD=1") of the same physical card end up in different card
+    // groups, but their display names match — merge those too, keeping the
+    // better route.
+    let mut i = 0;
+    while i < devices.len() {
+        let mut j = i + 1;
+        while j < devices.len() {
+            if normalize_name(&devices[i].name) != normalize_name(&devices[j].name) {
+                j += 1;
+                continue;
+            }
+            // Prefer the entry with a probing capture config, then the
+            // better route.
+            let (keep, drop) =
+                if (route_meta[j].1, route_meta[j].0) > (route_meta[i].1, route_meta[i].0) {
+                    (j, i)
+                } else {
+                    (i, j)
+                };
+            devices[keep].is_default |= devices[drop].is_default;
+            if keep != i {
+                devices.swap(i, j);
+                route_meta.swap(i, j);
+            }
+            let last = devices.len() - 1;
+            devices.swap(j, last);
+            route_meta.swap(j, last);
+            devices.pop();
+            route_meta.pop();
+        }
+        i += 1;
+    }
+
     Ok(devices)
+}
+
+/// Normalized display name for cross-group merging: whitespace collapsed.
+fn normalize_name(name: &str) -> String {
+    name.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Physical card identity of an ALSA pcm alias ("hw:CARD=PCH,DEV=0" →
+/// "PCH"). The plain "default" alias forms its own group.
+fn card_id(driver: &str) -> String {
+    if driver == "default" {
+        return "default".to_string();
+    }
+    driver
+        .split("CARD=")
+        .nth(1)
+        .map(|rest| {
+            rest.split([',', ':', ' '])
+                .next()
+                .unwrap_or("default")
+                .to_string()
+        })
+        .unwrap_or_else(|| driver.to_string())
+}
+
+/// Route quality within one card: plughw applies automatic format
+/// conversion and is the most forgiving route to open; hw is next; the
+/// other card aliases (sysdefault, front, usbstream, ...) rank lower.
+fn route_rank(driver: &str) -> u8 {
+    if driver.starts_with("plughw") {
+        4
+    } else if driver.starts_with("hw") {
+        3
+    } else if driver == "default" || driver.starts_with("sysdefault") || driver.starts_with("front")
+    {
+        2
+    } else {
+        1
+    }
 }
 
 /// List audio OUTPUT devices (sinks) via the PipeWire host. Opening a capture

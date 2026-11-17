@@ -1,10 +1,16 @@
-import {Component, createRef} from "react";
-import {FaCheck, FaCopy, FaMicrochip} from "react-icons/fa6";
+import {Component} from "react";
+import {FaCheck, FaCopy} from "react-icons/fa6";
 import {writeText} from "@tauri-apps/plugin-clipboard-manager";
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {DeviceList} from "./components/DeviceList";
+import {LanguagePicker} from "./components/LanguagePicker";
+import {ModelPicker} from "./components/ModelPicker";
+import {TranscriptChat} from "./components/TranscriptChat";
+import {InputToggle} from "./components/InputToggle";
+import {BackendBadge} from "./components/BackendBadge";
+import {SensitivitySlider} from "./components/SensitivitySlider";
 import type {AudioInputDevice, AudioOutputDevice} from "./components/DeviceList";
 import {Waveform} from "./components/Waveform";
 import "./App.css";
@@ -18,13 +24,9 @@ interface AppState {
     monitorError: string | null;
     gain: number;
     language: string;
-    languages: string[];
-    languagesError: string | null;
-    languagesOpen: boolean;
-    models: { name: string; active: boolean }[];
-    modelsOpen: boolean;
-    modelSwitching: boolean;
-    modelsError: string | null;
+    /** Model persisted from the previous session, forwarded to ModelPicker
+     *  once the settings file has been loaded. */
+    savedModel: string | null;
     autoType: boolean;
     windowFocused: boolean;
     backend: string;
@@ -49,27 +51,48 @@ class App extends Component<Record<string, never>, AppState> {
     /** Live unlisten functions, keyed by event name (StrictMode remounts can
      *  resolve two listen() promises for the same event — keep only one). */
     private unlistenMap = new Map<string, () => void>();
-    /** Scroll anchor for the transcript chat. */
-    private chatRef = createRef<HTMLDivElement>();
     /** Set on unmount: late-resolving listener promises must self-detach. */
     private disposed = false;
     /** Monotonic id of the latest start_audio_monitor request. */
     private monitorSeq = 0;
 
+    /** All persisted UI settings, loaded from the Rust side at startup
+     *  (settings.json next to transcript.json). Webview localStorage is not
+     *  used: in the packaged app its storage for the tauri://localhost
+     *  origin does not reliably survive restarts. */
+    private settings: Record<string, unknown> = {};
+
     private loadSetting<T>(key: string, fallback: T): T {
-        try {
-            const raw = window.localStorage.getItem(key);
-            return raw === null ? fallback : (JSON.parse(raw) as T);
-        } catch {
-            return fallback;
-        }
+        const value = this.settings[key];
+        return value === undefined ? fallback : (value as T);
     }
 
     private saveSetting(key: string, value: unknown): void {
+        this.settings[key] = value;
+        invoke("save_settings", {settings: this.settings}).catch(() => {
+            // storage unavailable — the in-memory copy still holds
+        });
+    }
+
+    /** First run of the file-based store: adopt whatever the webview
+     *  localStorage still holds (from previous dev-mode sessions). */
+    private migrateLegacyLocalStorage(): void {
         try {
-            window.localStorage.setItem(key, JSON.stringify(value));
+            for (let i = 0; i < window.localStorage.length; i++) {
+                const key = window.localStorage.key(i);
+                if (!key || !key.startsWith("translator.")) continue;
+                try {
+                    const raw = window.localStorage.getItem(key);
+                    if (raw !== null) this.settings[key] = JSON.parse(raw);
+                } catch {
+                    // malformed entry — skip
+                }
+            }
         } catch {
-            // storage unavailable — ignore
+            // storage unavailable — nothing to migrate
+        }
+        if (Object.keys(this.settings).length > 0) {
+            invoke("save_settings", {settings: this.settings}).catch(() => {});
         }
     }
 
@@ -82,13 +105,7 @@ class App extends Component<Record<string, never>, AppState> {
         monitorError: null,
         gain: 100,
         language: "auto",
-        languages: [],
-        languagesError: null,
-        languagesOpen: false,
-        models: [],
-        modelsOpen: false,
-        modelSwitching: false,
-        modelsError: null,
+        savedModel: null,
         autoType: true,
         windowFocused: false,
         backend: "cpu",
@@ -104,50 +121,48 @@ class App extends Component<Record<string, never>, AppState> {
         this.disposed = false;
         this.attachTranscriptionListeners();
 
+        this.refreshDevices();
         // Restore persisted settings (sensitivity, Input toggle, language,
-        // model) so they survive app restarts.
-        const gain = this.loadSetting<number>("translator.gain", 100);
-        const autoType = this.loadSetting<boolean>("translator.autoType", true);
-        const language = this.loadSetting<string>("translator.language", "auto");
-        const model = this.loadSetting<string | null>("translator.model", null);
-        // The transcript itself lives in a file on the Rust side (mounted
-        // volume) — webview localStorage is wiped on container recreation.
-        invoke<string[]>("load_transcript")
+        // model, device) from the Rust side so they survive app restarts.
+        // They live in a JSON file next to the transcript: webview
+        // localStorage is not reliably persisted in the packaged app.
+        const restore = invoke<Record<string, unknown>>("load_settings")
+            .then((saved) => {
+                this.settings = saved;
+                // First run of the file-based store: migrate whatever the
+                // dev-mode localStorage still holds.
+                if (Object.keys(this.settings).length === 0) {
+                    this.migrateLegacyLocalStorage();
+                }
+            })
+            // The transcript itself lives in a file on the Rust side.
+            .then(() => invoke<string[]>("load_transcript"))
             .then((saved) => {
                 this.setState({
-                    transcriptLines: saved,
-                    ...(saved.length === 0
-                        ? {
-                              transcriptLines: this.loadSetting<string[]>(
+                    transcriptLines:
+                        saved.length > 0
+                            ? saved
+                            : this.loadSetting<string[]>(
                                   "translator.transcriptLines",
                                   [],
                               ),
-                          }
-                        : {}),
-                });
-            })
-            .catch(() => {
-                this.setState({
-                    transcriptLines: this.loadSetting<string[]>(
-                        "translator.transcriptLines",
-                        [],
+                    gain: this.loadSetting<number>("translator.gain", 100),
+                    autoType: this.loadSetting<boolean>("translator.autoType", true),
+                    language: this.loadSetting<string>("translator.language", "auto"),
+                    savedModel: this.loadSetting<string | null>(
+                        "translator.model",
+                        null,
                     ),
                 });
             });
-        this.setState({
-            gain,
-            autoType,
-            language,
-        });
-
-        this.refreshDevices();
-        // The UI shell is rendered — dismiss the splash screen window and
+        // The restored UI is ready — dismiss the splash screen window and
         // reveal the main window. Failure is harmless (no splash, e.g. after
         // a webview reload in dev).
-        invoke("close_splashscreen").catch(() => {});
+        restore.finally(() => invoke("close_splashscreen").catch(() => {}));
         // Sync the device selection with the backend: the Rust process keeps
         // the capture monitor running across webview reloads, so the UI must
-        // reflect the device it is actually capturing from.
+        // reflect the device it is actually capturing from. Runs after the
+        // settings restore — auto-resume reads the saved device.
         // Layout diagnostics: find which element breaks the flex shrink chain.
         window.setTimeout(() => {
             const measure = (sel: string, name: string) => {
@@ -170,7 +185,8 @@ class App extends Component<Record<string, never>, AppState> {
             }).catch(() => {});
         }, 800);
 
-        invoke<ActiveMonitorPayload | null>("get_active_monitor")
+        restore
+            .then(() => invoke<ActiveMonitorPayload | null>("get_active_monitor"))
             .then((active) => {
                 if (active) {
                     // A monitor is already running (webview reload) — sync the
@@ -259,34 +275,19 @@ class App extends Component<Record<string, never>, AppState> {
         invoke<string>("get_transcription_backend")
             .then((backend) => this.setState({backend}))
             .catch(() => {});
-        invoke<string[]>("list_transcription_languages")
-            .then((languages) => {
-                invoke("debug_log", {
-                    message: `languages fetched: ${languages.length}`,
+        // Push the restored settings to the backend (runs once the file
+        // store has been loaded).
+        restore
+            .then(() => {
+                invoke("set_audio_monitor_gain", {
+                    gainPercent: this.loadSetting<number>("translator.gain", 100),
                 }).catch(() => {
                 });
-                this.setState({languages});
-            })
-            .catch((e) => {
-                invoke("debug_log", {message: `languages error: ${e}`}).catch(
-                    () => {
-                    },
-                );
-                this.setState({languagesError: String(e)});
-            });
-        this.refreshModels();
-
-        // Push the restored settings to the backend.
-        invoke("set_audio_monitor_gain", {gainPercent: gain}).catch(() => {
-        });
-        invoke("set_transcription_language", {language}).catch(() => {
-        });
-        if (model) {
-            invoke("select_transcription_model", {name: model})
-                .then(() => this.refreshModels())
-                .catch(() => {
+                invoke("set_transcription_language", {
+                    language: this.loadSetting<string>("translator.language", "auto"),
+                }).catch(() => {
                 });
-        }
+            });
     }
 
     componentDidUpdate(
@@ -295,23 +296,17 @@ class App extends Component<Record<string, never>, AppState> {
     ): void {
         // Chat: autoscroll + persistence — must run on every update, before
         // any early return below.
-        if (
-            prevState.transcriptLines !== this.state.transcriptLines ||
-            prevState.partial !== this.state.partial
-        ) {
-            const chat = this.chatRef.current;
-            if (chat) chat.scrollTop = 0;
-            if (prevState.transcriptLines !== this.state.transcriptLines) {
-                this.saveSetting(
-                    "translator.transcriptLines",
-                    this.state.transcriptLines,
-                );
-                const column = document.querySelector(".app-column-left");
-                const panel = document.querySelector(".live-panel");
-                invoke("debug_log", {
-                    message: `chat filled: chat h=${chat ? Math.round(chat.getBoundingClientRect().height) : -1} scrollH=${chat ? chat.scrollHeight : -1} | panel h=${panel ? Math.round(panel.getBoundingClientRect().height) : -1} | column h=${column ? Math.round(column.getBoundingClientRect().height) : -1} colScrollH=${column ? column.scrollHeight : -1}`,
-                }).catch(() => {});
-            }
+        if (prevState.transcriptLines !== this.state.transcriptLines) {
+            this.saveSetting(
+                "translator.transcriptLines",
+                this.state.transcriptLines,
+            );
+            const chat = document.querySelector(".transcript-chat");
+            const column = document.querySelector(".app-column-left");
+            const panel = document.querySelector(".live-panel");
+            invoke("debug_log", {
+                message: `chat filled: chat h=${chat ? Math.round(chat.getBoundingClientRect().height) : -1} scrollH=${chat ? chat.scrollHeight : -1} | panel h=${panel ? Math.round(panel.getBoundingClientRect().height) : -1} | column h=${column ? Math.round(column.getBoundingClientRect().height) : -1} colScrollH=${column ? column.scrollHeight : -1}`,
+            }).catch(() => {});
         }
 
         // The capture monitor is single: it runs either on the selected input
@@ -485,35 +480,15 @@ class App extends Component<Record<string, never>, AppState> {
     };
 
     private changeLanguage = (value: string): void => {
-        this.setState({language: value, languagesOpen: false});
+        this.setState({language: value});
         this.saveSetting("translator.language", value);
         invoke("set_transcription_language", {language: value}).catch(() => {
         });
     };
 
-    private refreshModels = (): void => {
-        invoke<{ name: string; active: boolean }[]>("list_available_models")
-            .then((models) => this.setState({models, modelsError: null}))
-            .catch((e) => this.setState({modelsError: String(e)}));
-    };
-
+    /** Persist the model choice (the switch itself is done by ModelPicker). */
     private selectModel = (name: string): void => {
-        if (this.state.modelSwitching) return;
-        const current = this.state.models.find((m) => m.active);
-        if (current && current.name === name) {
-            // Already loaded — just collapse the list.
-            this.setState({modelsOpen: false});
-            return;
-        }
-        this.setState({modelSwitching: true});
         this.saveSetting("translator.model", name);
-        invoke("select_transcription_model", {name})
-            .then(() => {
-                this.refreshModels();
-                this.setState({modelsOpen: false});
-            })
-            .catch((e) => this.setState({modelsError: String(e)}))
-            .finally(() => this.setState({modelSwitching: false}));
     };
 
     private toggleAutoType = (): void => {
@@ -570,13 +545,7 @@ class App extends Component<Record<string, never>, AppState> {
             monitorError,
             gain,
             language,
-            languages,
-            languagesError,
-            languagesOpen,
-            models,
-            modelsOpen,
-            modelSwitching,
-            modelsError,
+            savedModel,
             autoType,
             backend,
             transcriptLines,
@@ -604,105 +573,22 @@ class App extends Component<Record<string, never>, AppState> {
                             </p>
                         )}
                         <Waveform active={selected !== null || selectedOutput !== null}/>
-                        <div className="is-flex is-align-items-center mt-1">
-                            <span className="is-size-7 has-text-grey mr-2">Sensitivity</span>
-                            <input
-                                type="range"
-                                min={0}
-                                max={400}
-                                step={5}
-                                value={gain}
-                                disabled={(selected === null && selectedOutput === null) || !!monitorError}
-                                onChange={(e) => this.changeGain(Number(e.currentTarget.value))}
-                                className="gain-slider mr-2"
-                            />
-                            <span className="is-size-7 gain-value">{Math.round(gain)}%</span>
-                        </div>
+                        <SensitivitySlider
+                            value={gain}
+                            disabled={(selected === null && selectedOutput === null) || !!monitorError}
+                            onChange={this.changeGain}
+                        />
                         <div className="is-flex is-align-items-center flex-wrap mt-2">
-                            <span className="is-size-7 has-text-grey mr-2">Language</span>
-                            <button
-                                type="button"
-                                title="Change transcription language"
-                                className={"button is-small" + (language === "auto" ? " is-info" : " is-light")}
-                                onClick={() =>
-                                    this.setState((state) => ({
-                                        languagesOpen: !state.languagesOpen,
-                                    }))
-                                }
-                            >
-                                {language}
-                            </button>
-                            {languagesError && (
-                                <span className="is-size-7 has-text-danger">{languagesError}</span>
-                            )}
-                            <span className="is-size-7 has-text-grey ml-2 mr-2">Model</span>
-                            {modelsError && (
-                                <span className="is-size-7 has-text-danger">{modelsError}</span>
-                            )}
-                            <button
-                                type="button"
-                                title="Switch transcription model"
-                                className="button is-small is-light"
-                                onClick={() =>
-                                    this.setState((state) => ({modelsOpen: !state.modelsOpen}))
-                                }
-                            >
-                                {models.find((m) => m.active)?.name.replace(/^ggml-/, "").replace(/\.bin$/, "") ||
-                                    "\u2026"}
-                            </button>
-                            <span
-                                className={
-                                    "tag " +
-                                    (backend === "gpu" ? "tag-gpu" : "tag-cpu")
-                                }
-                                title={
-                                    backend === "gpu"
-                                        ? "Transcription runs on the NVIDIA GPU (CUDA)"
-                                        : "Transcription runs on the CPU"
-                                }
-                                style={{marginLeft: "auto"}}
-                            >
-                                <FaMicrochip style={{marginRight: "0.3rem"}}/>
-                                {backend.toUpperCase()}
-                            </span>
+                            <LanguagePicker
+                                language={language}
+                                onChange={this.changeLanguage}
+                            />
+                            <ModelPicker
+                                savedModel={savedModel}
+                                onSelect={this.selectModel}
+                            />
+                            <BackendBadge backend={backend}/>
                         </div>
-                        {languagesOpen && (
-                            <div className="language-chips mt-1">
-                                {[
-                                    ["auto", "auto"] as [string, string],
-                                    ...languages.map((code) => [code, code] as [string, string]),
-                                ].map(([value, label]) => (
-                                    <button
-                                        key={value}
-                                        type="button"
-                                        className={
-                                            "button is-small" +
-                                            (language === value ? " is-info" : " is-light")
-                                        }
-                                        onClick={() => this.changeLanguage(value)}
-                                    >
-                                        {label}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                        {modelsOpen && (
-                            <div className="chip-row mt-1">
-                                {models.map((m) => (
-                                    <button
-                                        key={m.name}
-                                        type="button"
-                                        disabled={modelSwitching}
-                                        className={
-                                            "button is-small" + (m.active ? " is-info" : " is-light")
-                                        }
-                                        onClick={() => this.selectModel(m.name)}
-                                    >
-                                        {m.name.replace(/^ggml-/, "").replace(/\.bin$/, "")}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
                     <div className="is-flex is-justify-content-space-between is-align-items-center mb-1 mt-3">
                         <div className="is-size-7 has-text-weight-semibold">Transcript</div>
                         <div className="is-flex is-align-items-center">
@@ -715,21 +601,10 @@ class App extends Component<Record<string, never>, AppState> {
                             >
                                 Clear
                             </button>
-                            <button
-                                type="button"
-                                className={
-                                    "button is-small mr-2" +
-                                    (autoType ? " is-success" : " is-light")
-                                }
-                                title={
-                                    autoType
-                                        ? "Input is ON — each phrase is typed into the focused application. Click to turn off."
-                                        : "Input is OFF — click to type each phrase into the focused application automatically."
-                                }
-                                onClick={() => this.toggleAutoType()}
-                            >
-                                Input: {autoType ? "on" : "off"}
-                            </button>
+                            <InputToggle
+                                on={autoType}
+                                onToggle={() => this.toggleAutoType()}
+                            />
                             <button
                                 type="button"
                                 className="icon-button"
@@ -744,17 +619,10 @@ class App extends Component<Record<string, never>, AppState> {
                             <div className="has-text-danger is-size-7">{typeError}</div>
                         )}
                     </div>
-                    <div className="transcript-chat" ref={this.chatRef}>
-                        {transcriptLines.length === 0 && !partial && (
-                            <div className="chat-empty">Transcribed text will appear here</div>
-                        )}
-                        {partial && (
-                            <div className="chat-message chat-partial">{partial}</div>
-                        )}
-                        {transcriptLines.map((line, i) => (
-                            <div key={i} className="chat-message">{line}</div>
-                        ))}
-                    </div>
+                    <TranscriptChat
+                        lines={transcriptLines}
+                        partial={partial}
+                    />
                     </div>
                     </div>
 

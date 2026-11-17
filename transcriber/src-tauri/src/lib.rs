@@ -66,6 +66,8 @@ pub fn run() {
             transcription::list_available_models,
             transcription::save_transcript,
             transcription::load_transcript,
+            transcription::save_settings,
+            transcription::load_settings,
             transcription::select_transcription_model,
             typing::type_text,
             debug_log,

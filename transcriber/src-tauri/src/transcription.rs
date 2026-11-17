@@ -168,6 +168,36 @@ pub fn load_transcript(app: AppHandle) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// Persist the UI settings (a key → value map) to `settings.json` next to
+/// the transcript. Replaces webview localStorage: in the packaged app its
+/// storage for the `tauri://localhost` origin does not reliably survive
+/// restarts, while this file does (and it is identical in dev and release).
+#[tauri::command]
+pub fn save_settings(
+    app: AppHandle,
+    settings: std::collections::HashMap<String, serde_json::Value>,
+) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let json = serde_json::to_string(&settings).map_err(|e| e.to_string())?;
+    std::fs::write(dir.join("settings.json"), json).map_err(|e| e.to_string())
+}
+
+/// Load the persisted UI settings (an empty map when the file does not
+/// exist yet).
+#[tauri::command]
+pub fn load_settings(
+    app: AppHandle,
+) -> std::collections::HashMap<String, serde_json::Value> {
+    let Ok(dir) = app.path().app_data_dir() else {
+        return Default::default();
+    };
+    std::fs::read_to_string(dir.join("settings.json"))
+        .ok()
+        .and_then(|data| serde_json::from_str(&data).ok())
+        .unwrap_or_default()
+}
+
 /// Switch the transcription model at runtime (reloads the context).
 #[tauri::command]
 pub async fn select_transcription_model(

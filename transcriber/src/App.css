@@ -282,3 +282,64 @@ section.compact .container {
     background-color: #946c00;
     color: #fffbea;
 }
+
+/* ---- Small popovers for the language/model pickers ---- */
+
+/* The anchor: the toggle button sits in a relative wrapper so the popover
+   can hover next to it without taking part in the layout flow. */
+.picker-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.picker-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 40;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 0.3rem;
+    /* Large enough to show every chip without scrolling. */
+    max-width: 420px;
+    padding: 0.5rem;
+    background-color: #ffffff;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.picker-popover .button {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+}
+
+/* Language chips: a fixed 10-column grid so the ~100 codes form a tidy
+   block instead of ragged wrapped rows. The chips fill their column
+   exactly (centered, compact padding) — a wider chip would clip the text
+   or overflow the popover. */
+.language-grid {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.language-grid .button {
+    padding: 0.2rem 0.1rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Model chips: one vertical column — each chip spans the popover width,
+   which fits the longest model name. */
+.model-list {
+    display: block;
+}
+
+.model-list .button {
+    display: block;
+    width: 100%;
+    text-align: left;
+}
