@@ -167,6 +167,17 @@ impl WhisperEngine {
         Ok(())
     }
 
+    /// Transcription backend: "gpu" when CUDA device nodes are available,
+    /// "cpu" otherwise. Fixed at startup — the backend cannot change while
+    /// the process is running.
+    pub fn backend(&self) -> &'static str {
+        if Self::gpu_available() {
+            "gpu"
+        } else {
+            "cpu"
+        }
+    }
+
     /// Load the default model eagerly (called at app startup, off the main
     /// thread) so the first transcription does not pay the load cost.
     pub fn preload(&self) -> Result<(), String> {

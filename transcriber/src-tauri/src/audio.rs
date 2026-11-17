@@ -705,11 +705,23 @@ pub fn start_audio_monitor(
     Ok(())
 }
 
+impl AudioMonitor {
+    /// Stop the monitor, invalidate the transcription worker and forget the
+    /// device. Used by `stop_audio_monitor` and on window close so the exit
+    /// does not wait for the capture stream or the in-flight transcription.
+    pub fn shutdown(&self) {
+        *self.stream.lock().unwrap() = None;
+        // Invalidate the transcription worker: it exits on its next tick
+        // (within 250 ms) instead of lingering while the app tears down.
+        self.generation.fetch_add(1, Ordering::Relaxed);
+        *self.active_device.lock().unwrap() = None;
+    }
+}
+
 /// Close the currently monitored device stream.
 #[tauri::command]
 pub fn stop_audio_monitor(state: State<'_, AudioMonitor>) {
-    *state.stream.lock().unwrap() = None;
-    *state.active_device.lock().unwrap() = None;
+    state.shutdown();
 }
 
 /// The device the capture monitor is currently running on (None when

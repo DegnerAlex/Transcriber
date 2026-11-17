@@ -1,5 +1,5 @@
 import {Component, createRef} from "react";
-import {FaCheck, FaCopy} from "react-icons/fa6";
+import {FaCheck, FaCopy, FaMicrochip} from "react-icons/fa6";
 import {writeText} from "@tauri-apps/plugin-clipboard-manager";
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
@@ -27,6 +27,7 @@ interface AppState {
     modelsError: string | null;
     autoType: boolean;
     windowFocused: boolean;
+    backend: string;
     transcriptLines: string[];
     partial: string | null;
     typeError: string | null;
@@ -90,6 +91,7 @@ class App extends Component<Record<string, never>, AppState> {
         modelsError: null,
         autoType: true,
         windowFocused: false,
+        backend: "cpu",
         transcriptLines: [],
         partial: null,
         typeError: null,
@@ -250,6 +252,9 @@ class App extends Component<Record<string, never>, AppState> {
             .catch(() => {
             });
 
+        invoke<string>("get_transcription_backend")
+            .then((backend) => this.setState({backend}))
+            .catch(() => {});
         invoke<string[]>("list_transcription_languages")
             .then((languages) => {
                 invoke("debug_log", {
@@ -569,6 +574,7 @@ class App extends Component<Record<string, never>, AppState> {
             modelSwitching,
             modelsError,
             autoType,
+            backend,
             transcriptLines,
             partial,
             typeError,
@@ -640,6 +646,21 @@ class App extends Component<Record<string, never>, AppState> {
                                 {models.find((m) => m.active)?.name.replace(/^ggml-/, "").replace(/\.bin$/, "") ||
                                     "\u2026"}
                             </button>
+                            <span
+                                className={
+                                    "tag " +
+                                    (backend === "gpu" ? "is-success" : "is-warning")
+                                }
+                                title={
+                                    backend === "gpu"
+                                        ? "Transcription runs on the NVIDIA GPU (CUDA)"
+                                        : "Transcription runs on the CPU"
+                                }
+                                style={{marginLeft: "auto"}}
+                            >
+                                <FaMicrochip style={{marginRight: "0.3rem"}}/>
+                                {backend.toUpperCase()}
+                            </span>
                         </div>
                         {languagesOpen && (
                             <div className="language-chips mt-1">

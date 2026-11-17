@@ -49,6 +49,7 @@ pub fn run() {
             audio::get_active_monitor,
             transcription::set_transcription_language,
             transcription::list_transcription_languages,
+            transcription::get_transcription_backend,
             transcription::list_available_models,
             transcription::save_transcript,
             transcription::load_transcript,

@@ -132,6 +132,12 @@ pub fn list_transcription_languages() -> Vec<String> {
     crate::whisper::WhisperEngine::languages()
 }
 
+/// The transcription backend in use: "gpu" (CUDA) or "cpu".
+#[tauri::command]
+pub fn get_transcription_backend(engine: State<'_, Arc<WhisperEngine>>) -> String {
+    engine.backend().to_string()
+}
+
 /// ggml models present in the model directories, with the loaded one marked.
 #[tauri::command]
 pub fn list_available_models(engine: State<'_, Arc<WhisperEngine>>) -> Vec<ModelOption> {
