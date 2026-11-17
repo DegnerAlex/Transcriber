@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::audio::{AudioMonitor, MonitorBuffer, VadState};
 use crate::whisper::{Transcription, WhisperEngine};
@@ -138,6 +138,30 @@ pub fn list_transcription_languages() -> Vec<String> {
 #[tauri::command]
 pub fn list_available_models(engine: State<'_, Arc<WhisperEngine>>) -> Vec<ModelOption> {
     engine.available_models()
+}
+
+/// Persist the transcript to a JSON file in the app data directory. The
+/// directory is mounted as a docker volume, so the transcript survives
+/// container recreation (webview localStorage does not).
+#[tauri::command]
+pub fn save_transcript(app: AppHandle, lines: Vec<String>) -> Result<(), String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file = dir.join("transcript.json");
+    let json = serde_json::to_string(&lines).map_err(|e| e.to_string())?;
+    std::fs::write(file, json).map_err(|e| e.to_string())
+}
+
+/// Load the persisted transcript (empty when the file does not exist yet).
+#[tauri::command]
+pub fn load_transcript(app: AppHandle) -> Vec<String> {
+    let Ok(dir) = app.path().app_data_dir() else {
+        return Vec::new();
+    };
+    std::fs::read_to_string(dir.join("transcript.json"))
+        .ok()
+        .and_then(|data| serde_json::from_str(&data).ok())
+        .unwrap_or_default()
 }
 
 /// Switch the transcription model at runtime (reloads the context).

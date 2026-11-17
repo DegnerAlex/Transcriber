@@ -50,6 +50,8 @@ pub fn run() {
             transcription::set_transcription_language,
             transcription::list_transcription_languages,
             transcription::list_available_models,
+            transcription::save_transcript,
+            transcription::load_transcript,
             transcription::select_transcription_model,
             typing::type_text,
             debug_log

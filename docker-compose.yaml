@@ -12,17 +12,17 @@ services:
     volumes:
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
-      - ./transcriptor/:/srv:cached
+      - ./transcriber/:/srv:cached
     ports:
       - "9999:9999"
     command: sh -c "npm run dev"
     network_mode: host
 
-  transcriptor:
+  transcriber:
     restart: "no"
     build:
       context: ./
-      dockerfile: docker/transcriptor/Dockerfile
+      dockerfile: docker/transcriber/Dockerfile
     environment:
       - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
@@ -60,7 +60,7 @@ services:
       - ${XDG_RUNTIME_DIR:-/run/user/1000}/pipewire-0:${XDG_RUNTIME_DIR:-/run/user/1000}/pipewire-0
       - /tmp/.X11-unix:/tmp/.X11-unix:ro
 #      - ./src-tauri/Exergame:/srv:cached
-      - ./transcriptor/:/srv:cached
+      - ./transcriber/:/srv:cached
       - ~/.local/share/:/root/.local/share/
       # Persistent cargo registry: gen/android references crates by absolute
       # registry paths, which must survive across `docker compose run` sessions.

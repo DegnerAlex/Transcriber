@@ -91,7 +91,9 @@ export class DeviceList extends Component<DeviceListProps> {
               >
                 <div className="device-line">
                   <span className="subtitle is-6 mb-0">
-                    {device.name}
+                    {device.name === "default_input"
+                      ? "System default input"
+                      : device.name}
                   </span>
                   {device.isDefault && (
                     <span className="tag is-info">default</span>
@@ -119,7 +121,9 @@ export class DeviceList extends Component<DeviceListProps> {
                       <span className="subtitle is-6 mb-0">
                         {device.name === "default_sink"
                           ? "System default output"
-                          : device.name}
+                          : device.name === "default_input"
+                              ? "System default input"
+                              : device.name}
                       </span>
                       {device.isDefault && (
                         <span className="tag is-info">default</span>

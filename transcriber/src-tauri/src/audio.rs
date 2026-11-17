@@ -53,6 +53,13 @@ pub struct AudioOutputDevice {
     pub is_default: bool,
 }
 
+/// The ALSA host, pinned explicitly: with the pipewire feature compiled in,
+/// `cpal::default_host()` prefers PipeWire, which would change the input
+/// device enumeration (and break the plughw driver-based selection).
+fn alsa_host() -> Result<cpal::Host, String> {
+    cpal::host_from_id(HostId::Alsa).map_err(|e| e.to_string())
+}
+
 /// The cpal host used for output-device (monitor) capture.
 fn pipewire_host() -> Option<cpal::Host> {
     match cpal::host_from_id(HostId::PipeWire) {
@@ -64,13 +71,6 @@ fn pipewire_host() -> Option<cpal::Host> {
     }
 }
 
-/// The ALSA host, pinned explicitly: with the pipewire feature compiled in,
-/// `cpal::default_host()` prefers PipeWire, which would change the input
-/// device enumeration (and break the plughw driver-based selection).
-fn alsa_host() -> Result<cpal::Host, String> {
-    cpal::host_from_id(HostId::Alsa).map_err(|e| e.to_string())
-}
-
 /// Enumerate every capture (input) device visible to the default cpal host.
 ///
 /// ALSA exposes many PCM aliases per physical card (default, sysdefault,
@@ -80,6 +80,10 @@ fn alsa_host() -> Result<cpal::Host, String> {
 /// conversion and is the most forgiving one to open.
 #[tauri::command]
 pub fn list_audio_input_devices() -> Result<Vec<AudioInputDevice>, String> {
+    // NOTE: microphone capture intentionally uses the ALSA host — the cpal
+    // PipeWire host misclassifies capture streams for duplex USB headsets
+    // (the stream targets the headset's speakers instead of the mic, which
+    // yields silence). PipeWire stays for output-device monitor capture.
     let host = alsa_host()?;
     let default_device = host.default_input_device();
 
@@ -603,6 +607,8 @@ pub fn start_audio_monitor(
     *state.stream.lock().unwrap() = None;
 
     let audio_host = match host.as_deref() {
+        // PipeWire only for output-device (sink monitor) capture; microphone
+        // capture runs on ALSA (see the note in list_audio_input_devices).
         Some("pipewire") => {
             pipewire_host().ok_or_else(|| "pipewire host unavailable".to_string())?
         }
@@ -618,7 +624,12 @@ pub fn start_audio_monitor(
             (Ok(description), Some(driver)) if audio_host.id() == HostId::PipeWire => {
                 description.name() == name
             }
-            (Ok(description), Some(driver)) => description.driver() == Some(driver.as_str()),
+            // Driver match first, but ALSA enumeration is flaky (a busy
+            // device can vanish from the hint list between calls) — fall
+            // back to the human-readable name.
+            (Ok(description), Some(driver)) => {
+                description.driver() == Some(driver.as_str()) || description.name() == name
+            }
             (Ok(description), None) => description.name() == name,
             (Err(_), _) => false,
         })

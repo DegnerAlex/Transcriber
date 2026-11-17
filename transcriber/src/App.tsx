@@ -100,20 +100,40 @@ class App extends Component<Record<string, never>, AppState> {
         this.disposed = false;
         this.attachTranscriptionListeners();
 
-        // Restore persisted settings (sensitivity, Insert toggle, language,
+        // Restore persisted settings (sensitivity, Input toggle, language,
         // model) so they survive app restarts.
         const gain = this.loadSetting<number>("translator.gain", 100);
         const autoType = this.loadSetting<boolean>("translator.autoType", true);
         const language = this.loadSetting<string>("translator.language", "auto");
         const model = this.loadSetting<string | null>("translator.model", null);
+        // The transcript itself lives in a file on the Rust side (mounted
+        // volume) — webview localStorage is wiped on container recreation.
+        invoke<string[]>("load_transcript")
+            .then((saved) => {
+                this.setState({
+                    transcriptLines: saved,
+                    ...(saved.length === 0
+                        ? {
+                              transcriptLines: this.loadSetting<string[]>(
+                                  "translator.transcriptLines",
+                                  [],
+                              ),
+                          }
+                        : {}),
+                });
+            })
+            .catch(() => {
+                this.setState({
+                    transcriptLines: this.loadSetting<string[]>(
+                        "translator.transcriptLines",
+                        [],
+                    ),
+                });
+            });
         this.setState({
             gain,
             autoType,
             language,
-            transcriptLines: this.loadSetting<string[]>(
-                "translator.transcriptLines",
-                [],
-            ),
         });
 
         this.refreshDevices();
@@ -380,9 +400,13 @@ class App extends Component<Record<string, never>, AppState> {
             });
             this.setState({partial: null});
             if (!text) return;
-            this.setState((state) => ({
-                transcriptLines: [text, ...state.transcriptLines],
-            }));
+            this.setState((state) => {
+                const transcriptLines = [text, ...state.transcriptLines];
+                invoke("save_transcript", {lines: transcriptLines}).catch(
+                    () => {},
+                );
+                return {transcriptLines};
+            });
             // Auto-type into the currently focused application, as long as it is
             // not this app itself (typing into our own window would be lost).
             if (this.state.autoType && !this.state.windowFocused) {
@@ -522,6 +546,7 @@ class App extends Component<Record<string, never>, AppState> {
 
     private clearTranscript = (): void => {
         this.setState({transcriptLines: [], partial: null, typeError: null});
+        invoke("save_transcript", {lines: []}).catch(() => {});
     };
 
     render() {
@@ -665,12 +690,12 @@ class App extends Component<Record<string, never>, AppState> {
                                 }
                                 title={
                                     autoType
-                                        ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
-                                        : "Insert is OFF — click to type each phrase into the focused application automatically."
+                                        ? "Input is ON — each phrase is typed into the focused application. Click to turn off."
+                                        : "Input is OFF — click to type each phrase into the focused application automatically."
                                 }
                                 onClick={() => this.toggleAutoType()}
                             >
-                                Insert: {autoType ? "on" : "off"}
+                                Input: {autoType ? "on" : "off"}
                             </button>
                             <button
                                 type="button"
