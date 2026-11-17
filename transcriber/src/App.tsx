@@ -141,6 +141,10 @@ class App extends Component<Record<string, never>, AppState> {
         });
 
         this.refreshDevices();
+        // The UI shell is rendered — dismiss the splash screen window and
+        // reveal the main window. Failure is harmless (no splash, e.g. after
+        // a webview reload in dev).
+        invoke("close_splashscreen").catch(() => {});
         // Sync the device selection with the backend: the Rust process keeps
         // the capture monitor running across webview reloads, so the UI must
         // reflect the device it is actually capturing from.

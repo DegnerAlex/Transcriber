@@ -11,13 +11,26 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Transcriber",
         "width": 800,
         "height": 640,
         "minWidth": 800,
         "minHeight": 600,
         "maxWidth": 800,
-        "maxHeight": 900
+        "maxHeight": 900,
+        "visible": false
+      },
+      {
+        "label": "splashscreen",
+        "title": "Transcriber",
+        "url": "splashscreen.html",
+        "width": 360,
+        "height": 200,
+        "resizable": false,
+        "center": true,
+        "decorations": false,
+        "alwaysOnTop": true
       }
     ],
     "security": {
