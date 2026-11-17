@@ -549,7 +549,16 @@ where
                 }
             },
             move |err| {
-                let _ = error_app.emit("audio-level-error", err.to_string());
+                let msg = err.to_string();
+                // ALSA underrun/overrun warnings are benign timing hiccups
+                // (stream (re)start, CPU/GPU load spikes during transcription).
+                // Log them instead of surfacing to the UI; only unexpected
+                // stream errors are forwarded.
+                if msg.contains("underrun") || msg.contains("overrun") {
+                    println!("[monitor] stream warning: {msg}");
+                } else {
+                    let _ = error_app.emit("audio-level-error", msg);
+                }
             },
             None,
         )

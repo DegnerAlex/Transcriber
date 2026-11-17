@@ -120,16 +120,70 @@ class App extends Component<Record<string, never>, AppState> {
         // Sync the device selection with the backend: the Rust process keeps
         // the capture monitor running across webview reloads, so the UI must
         // reflect the device it is actually capturing from.
+        // Layout diagnostics: find which element breaks the flex shrink chain.
+        window.setTimeout(() => {
+            const measure = (sel: string, name: string) => {
+                const el = document.querySelector(sel);
+                if (!el) {
+                    invoke("debug_log", {message: `${name}: not found`}).catch(() => {});
+                    return;
+                }
+                invoke("debug_log", {
+                    message: `${name}: h=${Math.round(el.getBoundingClientRect().height)} scrollH=${el.scrollHeight}`,
+                }).catch(() => {});
+            };
+            measure(".app-columns", "app-columns");
+            measure(".app-column-left", "column-left");
+            measure(".live-panel", "live-panel");
+            measure(".transcript-chat", "chat");
+            const doc = document.documentElement;
+            invoke("debug_log", {
+                message: `document: innerH=${window.innerHeight} docScrollH=${doc.scrollHeight} docClientH=${doc.clientHeight} bodyScrollH=${document.body.scrollHeight}`,
+            }).catch(() => {});
+        }, 800);
+
         invoke<ActiveMonitorPayload | null>("get_active_monitor")
             .then((active) => {
-                if (!active) return;
-                if (active.host === "pipewire") {
-                    this.setState({selectedOutput: active.name});
+                if (active) {
+                    // A monitor is already running (webview reload) — sync the
+                    // UI and remember the device for future restarts.
+                    if (active.host === "pipewire") {
+                        this.setState({selectedOutput: active.name});
+                    } else {
+                        this.setState({
+                            selected: {
+                                name: active.name,
+                                driver: active.driver,
+                                manufacturer: null,
+                                deviceType: "",
+                                interface: "",
+                                isDefault: false,
+                                defaultConfig: null,
+                            },
+                        });
+                    }
+                    this.saveSetting("translator.selectedDevice", {
+                        host: active.host,
+                        driver: active.driver,
+                        name: active.name,
+                    });
+                    return;
+                }
+                // No monitor running (full app restart) — auto-resume the
+                // device that was selected before the restart.
+                const saved = this.loadSetting<{
+                    host: string;
+                    driver: string | null;
+                    name: string;
+                } | null>("translator.selectedDevice", null);
+                if (!saved) return;
+                if (saved.host === "pipewire") {
+                    this.setState({selectedOutput: saved.name});
                 } else {
                     this.setState({
                         selected: {
-                            name: active.name,
-                            driver: active.driver,
+                            name: saved.name,
+                            driver: saved.driver,
                             manufacturer: null,
                             deviceType: "",
                             interface: "",
@@ -208,26 +262,32 @@ class App extends Component<Record<string, never>, AppState> {
         _prevProps: Record<string, never>,
         prevState: AppState,
     ): void {
-        // The capture monitor is single: it runs either on the selected input
-        // device (ALSA) or on the selected output device (PipeWire monitor).
-        const prev = this.monitorRequest(prevState);
-        const next = this.monitorRequest(this.state);
-        if (prev?.key === next?.key) return;
-
+        // Chat: autoscroll + persistence — must run on every update, before
+        // any early return below.
         if (
             prevState.transcriptLines !== this.state.transcriptLines ||
             prevState.partial !== this.state.partial
         ) {
             const chat = this.chatRef.current;
-            if (chat) chat.scrollTop = chat.scrollHeight;
-            // Persist the transcript so it survives app restarts.
+            if (chat) chat.scrollTop = 0;
             if (prevState.transcriptLines !== this.state.transcriptLines) {
                 this.saveSetting(
                     "translator.transcriptLines",
                     this.state.transcriptLines,
                 );
+                const column = document.querySelector(".app-column-left");
+                const panel = document.querySelector(".live-panel");
+                invoke("debug_log", {
+                    message: `chat filled: chat h=${Math.round(chat.getBoundingClientRect().height)} scrollH=${chat.scrollHeight} | panel h=${panel ? Math.round(panel.getBoundingClientRect().height) : -1} | column h=${column ? Math.round(column.getBoundingClientRect().height) : -1} colScrollH=${column ? column.scrollHeight : -1}`,
+                }).catch(() => {});
             }
         }
+
+        // The capture monitor is single: it runs either on the selected input
+        // device (ALSA) or on the selected output device (PipeWire monitor).
+        const prev = this.monitorRequest(prevState);
+        const next = this.monitorRequest(this.state);
+        if (prev?.key === next?.key) return;
 
         if (next) {
             if (next.host === "alsa") {
@@ -321,7 +381,7 @@ class App extends Component<Record<string, never>, AppState> {
             this.setState({partial: null});
             if (!text) return;
             this.setState((state) => ({
-                transcriptLines: [...state.transcriptLines, text],
+                transcriptLines: [text, ...state.transcriptLines],
             }));
             // Auto-type into the currently focused application, as long as it is
             // not this app itself (typing into our own window would be lost).
@@ -355,21 +415,30 @@ class App extends Component<Record<string, never>, AppState> {
     /** Clicking the selected device again stops monitoring it. Selecting an
      *  input device also deselects the output one (one monitor at a time). */
     private toggleDevice = (device: AudioInputDevice): void => {
-        this.setState((state) =>
-            state.selected !== null &&
-            state.selected.name === device.name &&
-            state.selected.driver === device.driver
-                ? {selected: null, selectedOutput: null}
-                : {selected: device, selectedOutput: null},
+        const same =
+            this.state.selected !== null &&
+            this.state.selected.name === device.name &&
+            this.state.selected.driver === device.driver;
+        const selected = same ? null : device;
+        this.setState({selected, selectedOutput: null});
+        this.saveSetting(
+            "translator.selectedDevice",
+            selected
+                ? {host: "alsa", driver: selected.driver, name: selected.name}
+                : null,
         );
     };
 
     /** Clicking the selected output device again stops monitoring it. */
     private toggleOutputDevice = (device: AudioOutputDevice): void => {
-        this.setState((state) =>
-            state.selectedOutput === device.name
-                ? {selectedOutput: null, selected: null}
-                : {selectedOutput: device.name, selected: null},
+        const same = this.state.selectedOutput === device.name;
+        const selectedOutput = same ? null : device.name;
+        this.setState({selectedOutput, selected: null});
+        this.saveSetting(
+            "translator.selectedDevice",
+            selectedOutput
+                ? {host: "pipewire", driver: null, name: selectedOutput}
+                : null,
         );
     };
 
@@ -421,7 +490,9 @@ class App extends Component<Record<string, never>, AppState> {
     private copyTranscript = async (): Promise<void> => {
         const lines = this.state.transcriptLines;
         if (lines.length === 0) return;
-        const text = lines.join("\n");
+        // The chat shows newest first; the copied text is chronological
+        // (oldest on top, newest at the bottom).
+        const text = [...lines].reverse().join("\n");
         try {
             // navigator.clipboard throws NotAllowedError inside WKWebView —
             // the native clipboard plugin is the reliable path in Tauri.
@@ -482,7 +553,7 @@ class App extends Component<Record<string, never>, AppState> {
                 <div className="container is-max-desktop">
                     <div className="app-columns">
                         <div className="app-column-left">
-                    <div className="box p-3 live-panel">
+                    <div className="live-panel">
                         <div className="is-size-7 has-text-weight-semibold mb-1">
                             {selected
                                 ? `Live: ${selected.name}`
@@ -574,7 +645,59 @@ class App extends Component<Record<string, never>, AppState> {
                                 ))}
                             </div>
                         )}
+                    <div className="is-flex is-justify-content-space-between is-align-items-center mb-1 mt-3">
+                        <div className="is-size-7 has-text-weight-semibold">Transcript</div>
+                        <div className="is-flex is-align-items-center">
+                            <button
+                                type="button"
+                                className="button is-small is-light mr-2"
+                                title="Discard the transcript"
+                                disabled={transcriptLines.length === 0 && !partial}
+                                onClick={() => this.clearTranscript()}
+                            >
+                                Clear
+                            </button>
+                            <button
+                                type="button"
+                                className={
+                                    "button is-small mr-2" +
+                                    (autoType ? " is-success" : " is-light")
+                                }
+                                title={
+                                    autoType
+                                        ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
+                                        : "Insert is OFF — click to type each phrase into the focused application automatically."
+                                }
+                                onClick={() => this.toggleAutoType()}
+                            >
+                                Insert: {autoType ? "on" : "off"}
+                            </button>
+                            <button
+                                type="button"
+                                className="icon-button"
+                                title="Copy all transcribed text"
+                                disabled={transcriptLines.length === 0}
+                                onClick={() => this.copyTranscript()}
+                            >
+                                {copied ? <FaCheck/> : <FaCopy/>}
+                            </button>
+                        </div>
                     </div>
+                    <div className="transcript-chat" ref={this.chatRef}>
+                        {transcriptLines.length === 0 && !partial && (
+                            <div className="chat-empty">Transcribed text will appear here</div>
+                        )}
+                        {partial && (
+                            <div className="chat-message chat-partial">{partial}</div>
+                        )}
+                        {transcriptLines.map((line, i) => (
+                            <div key={i} className="chat-message">{line}</div>
+                        ))}
+                    </div>
+                    </div>
+                    </div>
+
+                    <div className="app-column-right">
                     <DeviceList
                         devices={devices}
                         selected={selected}
@@ -585,68 +708,6 @@ class App extends Component<Record<string, never>, AppState> {
                         selectedOutput={selectedOutput}
                         onToggleOutput={(device) => this.toggleOutputDevice(device)}
                     />
-                    </div>
-
-                    <div className="app-column-right">
-                        <div className="box p-3 transcript-box">
-                            <div className="is-flex is-justify-content-space-between is-align-items-center mb-1">
-                                <div className="is-size-7 has-text-weight-semibold">Transcript</div>
-                                <div className="is-flex is-align-items-center">
-                                    <button
-                                        type="button"
-                                        className={
-                                            "button is-small mr-2" +
-                                            (autoType ? " is-success" : " is-light")
-                                        }
-                                        title={
-                                            autoType
-                                                ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
-                                                : "Insert is OFF — click to type each phrase into the focused application automatically."
-                                        }
-                                        onClick={() => this.toggleAutoType()}
-                                    >
-                                        Insert: {autoType ? "on" : "off"}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="icon-button"
-                                        title="Copy all transcribed text"
-                                        disabled={transcriptLines.length === 0}
-                                        onClick={() => this.copyTranscript()}
-                                    >
-                                        {copied ? <FaCheck/> : <FaCopy/>}
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="transcript-chat" ref={this.chatRef}>
-                                {transcriptLines.length === 0 && !partial && (
-                                    <div className="chat-empty">Transcribed text will appear here</div>
-                                )}
-                                {transcriptLines.map((line, i) => (
-                                    <div key={i} className="chat-message">{line}</div>
-                                ))}
-                                {partial && (
-                                    <div className="chat-message chat-partial">{partial}</div>
-                                )}
-                            </div>
-                            <div className="is-flex is-align-items-center mt-1">
-                                <button
-                                    type="button"
-                                    className="button is-small is-light"
-                                    style={{marginLeft: "auto"}}
-                                    title="Discard the transcript"
-                                    disabled={transcriptLines.length === 0 && !partial}
-                                    onClick={() => this.clearTranscript()}
-                                >
-                                    Clear
-                                </button>
-                            </div>
-                            {typeError && (
-                                <p className="notification is-warning is-light py-1 px-2 is-size-7 mt-1">
-                                    {typeError}
-                                </p>
-                            )}
-                        </div>
                     </div>
                 </div>
             </div>

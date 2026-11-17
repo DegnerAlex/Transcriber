@@ -37,21 +37,6 @@ interface DeviceListProps {
   onToggleOutput: (device: AudioOutputDevice) => void;
 }
 
-/** Human-readable summary line for a device, e.g.
- *  "plughw:CARD=Seri,DEV=0 · Plantronics · Microphone · 2 ch · 48000 Hz · F32". */
-function describeDevice(device: AudioInputDevice): string | null {
-  return [
-    device.driver,
-    device.manufacturer,
-    device.deviceType,
-    device.defaultConfig
-      ? `${device.defaultConfig.channels} ch · ${device.defaultConfig.sampleRate} Hz · ${device.defaultConfig.sampleFormat}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 /** The list of audio input devices; clicking a row toggles its selection. */
 export class DeviceList extends Component<DeviceListProps> {
   render() {
@@ -75,7 +60,7 @@ export class DeviceList extends Component<DeviceListProps> {
           <div className="level-right">
             <button
               type="button"
-              className="button is-small is-outlined is-info"
+              className="button is-small refresh-button"
               onClick={onRefresh}
             >
               Refresh
@@ -93,7 +78,6 @@ export class DeviceList extends Component<DeviceListProps> {
 
         <ul className="device-list device-list-scroll">
           {devices.map((device) => {
-            const meta = describeDevice(device);
             const isSelected =
               selected !== null &&
               selected.name === device.name &&
@@ -106,21 +90,20 @@ export class DeviceList extends Component<DeviceListProps> {
                 onClick={() => onToggle(device)}
               >
                 <div className="device-line">
-                  <span className="device-name">
+                  <span className="subtitle is-6 mb-0">
                     {device.name}
                   </span>
                   {device.isDefault && (
                     <span className="tag is-info">default</span>
                   )}
                 </div>
-                {meta && <span className="device-meta">{meta}</span>}
               </li>
             );
           })}
         </ul>
 
         {outputs.length > 0 && (
-          <div className="mt-2">
+          <div className="mt-5">
             <div className="has-text-weight-semibold mb-1">Audio output</div>
             <ul className="device-list">
               {outputs.map((device) => {
@@ -133,7 +116,7 @@ export class DeviceList extends Component<DeviceListProps> {
                     onClick={() => onToggleOutput(device)}
                   >
                     <div className="device-line">
-                      <span className="device-name">
+                      <span className="subtitle is-6 mb-0">
                         {device.name === "default_sink"
                           ? "System default output"
                           : device.name}
@@ -142,11 +125,6 @@ export class DeviceList extends Component<DeviceListProps> {
                         <span className="tag is-info">default</span>
                       )}
                     </div>
-                    <span className="device-meta">
-                      {[device.deviceType, device.interface]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
                   </li>
                 );
               })}

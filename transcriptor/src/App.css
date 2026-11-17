@@ -7,12 +7,15 @@ html {
 
 html, body, #root {
     height: 100%;
+    overflow: hidden;
 }
 
 /* ---- Layout (two columns, full height) ---- */
 
 section.compact {
-    padding: 0.75rem 1rem;
+    /* Bottom padding matches the mt-1 gap between the chat and the Clear
+       button, so the button sits evenly above the window edge. */
+    padding: 0.75rem 1rem 0.25rem;
     display: flex;
     flex-direction: column;
 }
@@ -33,25 +36,35 @@ section.compact .container {
 }
 
 .app-column-left {
+    position: relative;
     flex: 1 1 58%;
     min-width: 0;
-    overflow-y: auto;
+    min-height: 0;
+    overflow: hidden;
     padding-right: 0.25rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .app-column-right {
     flex: 1 1 42%;
     min-width: 0;
     height: 100%;
+    overflow: hidden;
+}
+
+/* Absolutely positioned inside .app-column-left: the panel is exactly the
+   column's box and can never grow past the window, no matter how much text
+   the chat contains. */
+.live-panel {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
-    min-height: 0;
 }
 
-.live-panel {
-    margin-bottom: 0.75rem;
-}
-
+/* The transcript section inside the merged live panel: the chat fills the
+   remaining box height. */
 .transcript-box {
     flex: 1 1 auto;
     min-height: 0;
@@ -82,8 +95,7 @@ section.compact .container {
 }
 
 .device-list-scroll {
-    max-height: 30vh;
-    overflow-y: auto;
+    /* No inner scroll: the whole column scrolls instead. */
 }
 
 .device-item {
@@ -147,14 +159,29 @@ section.compact .container {
 
 .transcript-chat {
     flex: 1 1 auto;
-    min-height: 6rem;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
     padding: 0.5rem;
-    border-radius: 8px;
+    border-radius: 6px;
     background-color: rgba(127, 127, 127, 0.1);
+}
+
+/* visible side scrollbar for the chat */
+.transcript-chat::-webkit-scrollbar {
+    width: 8px;
+}
+
+.transcript-chat::-webkit-scrollbar-thumb {
+    background: rgba(127, 127, 127, 0.45);
+    border-radius: 4px;
+}
+
+.transcript-chat::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .chat-message {
@@ -223,4 +250,9 @@ section.compact .container {
 .icon-button svg {
     width: 0.9rem;
     height: 0.9rem;
+}
+
+.refresh-button {
+    padding: 0.15rem 0.6rem;
+    font-size: 0.72rem;
 }
