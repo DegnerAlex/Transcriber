@@ -1,6 +1,7 @@
 import { Component } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { DeviceList } from "./components/DeviceList";
 import type { AudioInputDevice } from "./components/DeviceList";
 import { Waveform } from "./components/Waveform";
@@ -22,6 +23,8 @@ interface AppState {
   languages: string[];
   languagesError: string | null;
   languagesOpen: boolean;
+  autoType: boolean;
+  windowFocused: boolean;
   transcript: string | null;
   partial: string | null;
   typeError: string | null;
@@ -33,8 +36,9 @@ interface TranscriptionPayload {
 }
 
 class App extends Component<Record<string, never>, AppState> {
-  /** Unlisten functions for the Tauri event subscriptions. */
-  private unlisteners: Array<() => void> = [];
+  /** Live unlisten functions, keyed by event name (StrictMode remounts can
+   *  resolve two listen() promises for the same event — keep only one). */
+  private unlistenMap = new Map<string, () => void>();
   /** Set on unmount: late-resolving listener promises must self-detach. */
   private disposed = false;
   /** Monotonic id of the latest start_audio_monitor request. */
@@ -50,16 +54,46 @@ class App extends Component<Record<string, never>, AppState> {
     languages: [],
     languagesError: null,
     languagesOpen: false,
+    autoType: true,
+    windowFocused: false,
     transcript: null,
     partial: null,
     typeError: null,
   };
 
   componentDidMount(): void {
-    // Attach listeners synchronously so StrictMode's simulated unmount
-    // cannot race the (async) listen() promises.
+    // StrictMode may simulate unmount+remount on the same instance; the
+    // disposed flag must be cleared so listeners re-attach on the remount.
+    this.disposed = false;
     this.attachTranscriptionListeners();
     this.refreshDevices();
+
+    // Track whether the translator window itself has focus: auto-typing is
+    // suppressed while it does, so phrases are never typed into this app.
+    // Guarded: outside the Tauri webview (plain browser) getCurrentWindow()
+    // throws synchronously.
+    try {
+      const appWindow = getCurrentWindow();
+      appWindow
+        .isFocused()
+        .then((focused) => {
+          if (!this.disposed) this.setState({ windowFocused: focused });
+        })
+        .catch(() => {});
+      appWindow
+        .onFocusChanged((event) => {
+          if (!this.disposed) this.setState({ windowFocused: !!event.payload });
+        })
+        .then((stop) => {
+          if (this.disposed) stop();
+          else this.unlistenMap.set("__windowFocus", stop);
+        })
+        .catch(() => {});
+    } catch {
+      // Not running inside Tauri — focus suppression unavailable.
+    }
+
+    invoke<string[]>("list_transcription_languages")
     invoke<string[]>("list_transcription_languages")
       .then((languages) => {
         invoke("debug_log", {
@@ -106,8 +140,8 @@ class App extends Component<Record<string, never>, AppState> {
 
   componentWillUnmount(): void {
     this.disposed = true;
-    this.unlisteners.forEach((stop) => stop());
-    this.unlisteners = [];
+    this.unlistenMap.forEach((stop) => stop());
+    this.unlistenMap.clear();
     if (this.state.selected) {
       invoke("stop_audio_monitor").catch(() => {});
     }
@@ -116,15 +150,20 @@ class App extends Component<Record<string, never>, AppState> {
   private attachTranscriptionListeners(): void {
     // Automatic transcription results arrive as events from the Rust VAD/
     // whisper pipeline; each finalized utterance is appended on its own line.
-    // A listener that resolves after unmount detaches itself immediately,
-    // otherwise StrictMode's double mount leaves duplicates attached and
-    // every utterance would be appended twice.
-    const register = (stop: () => void) => {
+    // StrictMode's mount/unmount/remount cycle can resolve two listen()
+    // promises for the same event: the first one to resolve wins, later
+    // duplicates detach themselves immediately.
+    const register = (event: string, stop: () => void) => {
       if (this.disposed) {
         stop();
         return;
       }
-      this.unlisteners.push(stop);
+      const existing = this.unlistenMap.get(event);
+      if (existing) {
+        stop();
+        return;
+      }
+      this.unlistenMap.set(event, stop);
     };
 
     listen<TranscriptionPayload>("transcription", (event) => {
@@ -140,15 +179,22 @@ class App extends Component<Record<string, never>, AppState> {
             ? `${state.transcript}\n${text}`
             : text,
       }));
-    }).then((stop) => register(stop));
+      // Auto-type into the currently focused application, as long as it is
+      // not this app itself (typing into our own window would be lost).
+      if (this.state.autoType && !this.state.windowFocused) {
+        invoke("type_text", { text }).catch((e) =>
+          this.setState({ typeError: String(e) }),
+        );
+      }
+    }).then((stop) => register("transcription", stop));
 
     listen<TranscriptionPayload>("transcription-partial", (event) => {
       this.setState({ partial: event.payload.text.trim() || null });
-    }).then((stop) => register(stop));
+    }).then((stop) => register("transcription-partial", stop));
 
     listen<string>("transcription-error", (event) => {
       this.setState({ transcript: `Error: ${event.payload}` });
-    }).then((stop) => register(stop));
+    }).then((stop) => register("transcription-error", stop));
   }
 
   private async refreshDevices(): Promise<void> {
@@ -211,6 +257,7 @@ class App extends Component<Record<string, never>, AppState> {
       languages,
       languagesError,
       languagesOpen,
+      autoType,
       transcript,
       partial,
       typeError,
@@ -311,15 +358,17 @@ class App extends Component<Record<string, never>, AppState> {
                   : "Transcribed text will appear here"}
               </p>
               <div className="is-flex is-align-items-center mt-1">
-                <button
-                  type="button"
-                  className="button is-small"
-                  title="Type the transcript into the focused window"
-                  disabled={!transcript || transcript.startsWith("Error:")}
-                  onClick={() => this.typeTranscript()}
-                >
-                  Type
-                </button>
+                {!autoType && (
+                  <button
+                    type="button"
+                    className="button is-small"
+                    title="Type the transcript into the focused window"
+                    disabled={!transcript || transcript.startsWith("Error:")}
+                    onClick={() => this.typeTranscript()}
+                  >
+                    Type
+                  </button>
+                )}
                 <button
                   type="button"
                   className="button is-small is-light ml-2"
@@ -328,6 +377,22 @@ class App extends Component<Record<string, never>, AppState> {
                   onClick={() => this.clearTranscript()}
                 >
                   Clear
+                </button>
+                <button
+                  type="button"
+                  className={
+                    "button is-small" +
+                    (autoType ? " is-success" : " is-light")
+                  }
+                  style={{ marginLeft: "auto" }}
+                  title={
+                    autoType
+                      ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
+                      : "Insert is OFF — click to type each phrase into the focused application automatically."
+                  }
+                  onClick={() => this.setState((state) => ({ autoType: !state.autoType }))}
+                >
+                  Insert: {autoType ? "on" : "off"}
                 </button>
               </div>
             </div>

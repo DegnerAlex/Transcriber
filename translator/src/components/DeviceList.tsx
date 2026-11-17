@@ -45,7 +45,7 @@ export class DeviceList extends Component<DeviceListProps> {
     const { devices, selected, error, onToggle } = this.props;
 
     return (
-      <div className="box">
+      <div className="devices-section">
         {error && (
           <p className="notification is-danger is-light">
             Error: {error}

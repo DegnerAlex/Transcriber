@@ -42,7 +42,7 @@ impl WhisperEngine {
     }
 
     /// Resolve the model file: explicit argument > WHISPER_MODEL_PATH env >
-    /// conventional locations.
+    /// conventional locations, preferring the most accurate model available.
     fn resolve_model_path(explicit: Option<&str>) -> Result<PathBuf, String> {
         let mut candidates: Vec<PathBuf> = Vec::new();
         if let Some(path) = explicit {
@@ -53,8 +53,21 @@ impl WhisperEngine {
                 candidates.push(PathBuf::from(env));
             }
         }
-        candidates.push(PathBuf::from("models/ggml-base.bin"));
-        candidates.push(PathBuf::from("src-tauri/models/ggml-base.bin"));
+        // Preference order: large-v3-turbo quantized > large-v3-turbo >
+        // medium quantized > small quantized > base.
+        const PREFERRED: [&str; 5] = [
+            "ggml-large-v3-turbo-q5_0.bin",
+            "ggml-large-v3-turbo.bin",
+            "ggml-medium-q5_0.bin",
+            "ggml-small-q5_1.bin",
+            "ggml-base.bin",
+        ];
+        const DIRS: [&str; 2] = ["models", "src-tauri/models"];
+        for name in PREFERRED {
+            for dir in DIRS {
+                candidates.push(PathBuf::from(format!("{dir}/{name}")));
+            }
+        }
         candidates.push(PathBuf::from("/srv/src-tauri/models/ggml-base.bin"));
 
         candidates
@@ -87,17 +100,36 @@ impl WhisperEngine {
             return Ok(());
         }
         let path = Self::resolve_model_path(explicit)?;
-        println!("[whisper] loading model from {} ...", path.display());
+        let use_gpu = Self::gpu_available();
+        println!(
+            "[whisper] loading model from {} ({}) ...",
+            path.display(),
+            if use_gpu { "CUDA GPU" } else { "CPU fallback" }
+        );
         let started = std::time::Instant::now();
-        let ctx =
-            WhisperContext::new_with_params(&path, WhisperContextParameters::default())
-                .map_err(|e| format!("failed to load whisper model {}: {e}", path.display()))?;
+        let ctx = WhisperContext::new_with_params(
+            &path,
+            WhisperContextParameters {
+                use_gpu,
+                ..Default::default()
+            },
+        )
+        .map_err(|e| format!("failed to load whisper model {}: {e}", path.display()))?;
         println!(
             "[whisper] model loaded in {:.1}s",
             started.elapsed().as_secs_f32()
         );
         *slot = Some(LoadedModel { path, ctx });
         Ok(())
+    }
+
+    /// True when NVIDIA CUDA device nodes are exposed to this process (they
+    /// are injected by nvidia-container-toolkit). Without them the CUDA
+    /// backend cannot initialize, so we ask whisper to run on the CPU
+    /// instead. If the GPU disappears later or CUDA init fails at runtime,
+    /// ggml also falls back to CPU on its own.
+    fn gpu_available() -> bool {
+        Path::new("/dev/nvidia-uvm").exists() && Path::new("/dev/nvidiactl").exists()
     }
 
     /// Load the default model eagerly (called at app startup, off the main

@@ -34,7 +34,7 @@ services:
       - WEBKIT_DEBUG=1
       - CI=true
       # whisper.cpp ggml model for the transcription engine
-      - WHISPER_MODEL_PATH=/srv/src-tauri/models/ggml-base.bin
+      - WHISPER_MODEL_PATH=/srv/src-tauri/models/ggml-medium-q5_0.bin
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       # linuxdeploy (AppImage bundler) is itself an AppImage and cannot mount
