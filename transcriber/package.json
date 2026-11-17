@@ -1,5 +1,5 @@
 {
-  "name": "translator",
+  "name": "transcriber",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -98,5 +98,6 @@
     "url": "^0.11.4",
     "util": "^0.12.5",
     "webfft": "^1.0.3"
-  }
+  },
+  "productName": null
 }

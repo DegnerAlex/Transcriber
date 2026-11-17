@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "translator",
+  "productName": "Transcriber",
   "version": "0.1.0",
-  "identifier": "me.ergofox.translator",
+  "identifier": "me.ergofox.transcriber",
   "build": {
     "devUrl": "http://localhost:9999",
     "beforeBuildCommand": "pnpm build",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "translator",
+        "title": "Transcriber",
         "width": 800,
         "height": 640,
         "minWidth": 800,
