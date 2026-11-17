@@ -432,8 +432,6 @@ struct MonitorLinks {
     app: AppHandle,
     /// Backend label for diagnostics ("alsa"/"pipewire").
     host_label: String,
-    /// Throttle for the periodic rms diagnostic log.
-    last_rms_log: Mutex<Instant>,
 }
 
 fn build_monitor_stream<T>(
@@ -676,7 +674,6 @@ pub fn start_audio_monitor(
         utterances: utterances_tx,
         app: app.clone(),
         host_label: host.as_deref().unwrap_or("alsa").to_string(),
-        last_rms_log: Mutex::new(Instant::now() - Duration::from_secs(10)),
     };
 
     let stream = match build_monitor_for_format(&device, preferred_config.clone(), sample_format, &links) {

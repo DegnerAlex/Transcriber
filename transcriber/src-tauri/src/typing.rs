@@ -2,8 +2,6 @@
 
 use std::sync::Mutex;
 
-use tauri::State;
-
 /// Serializes typing sessions: concurrent type_text calls (e.g. auto-insert of
 /// a new utterance while the previous one is still being typed) must not
 /// interleave keystrokes.

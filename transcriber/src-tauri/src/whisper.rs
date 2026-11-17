@@ -226,7 +226,14 @@ impl WhisperEngine {
             .unwrap_or_default();
 
         let mut found: Vec<String> = Vec::new();
-        for dir in MODEL_DIRS {
+        let mut dirs: Vec<PathBuf> = MODEL_DIRS.iter().map(PathBuf::from).collect();
+        // The exe-relative dir covers the AppImage layout (usr/bin/models).
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                dirs.insert(0, exe_dir.join("models"));
+            }
+        }
+        for dir in dirs {
             let Ok(entries) = std::fs::read_dir(dir) else {
                 continue;
             };

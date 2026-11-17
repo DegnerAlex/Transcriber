@@ -1,8 +1,6 @@
 //! Transcription pipeline: the utterance worker that feeds VAD output to
 //! whisper, plus commands for language and model selection.
 
-use serde::Serialize;
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -11,7 +9,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::audio::{AudioMonitor, MonitorBuffer, VadState};
-use crate::whisper::{Transcription, WhisperEngine};
+use crate::whisper::WhisperEngine;
 
 /// Re-exported for the frontend-facing command signatures.
 pub use crate::whisper::ModelOption;

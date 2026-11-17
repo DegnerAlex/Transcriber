@@ -86,15 +86,8 @@ Everything survives app restarts and container recreation:
 docker compose up frontend transcriber
 ```
 
-- `frontend` — the Vite dev server on `http://localhost:9999` (the Tauri window loads its UI from there);
-- `transcriber` — the Rust application (`cargo tauri dev`), the window opens on the host desktop.
-
-Container requirements, already wired in `docker-compose.yaml` / `docker/transcriber/Dockerfile`:
-
-- NVIDIA GPU (`deploy.resources.reservations.devices`) and the CUDA 13.1 toolkit baked into the image (whisper.cpp is built with `GGML_CUDA`);
-- `/dev/snd` (bind mount + `device_cgroup_rules: c 116:* rwm` for hot-plugging devices);
-- user sockets: `pipewire-0` (output capture), Wayland/X11 (the window and XTest typing);
-- Node.js 22 + pnpm, Rust (stable), cmake, g++-14 (the nvcc host compiler), pipewire-bin.
+- `frontend` — the Vite dev server on `http://localhost:9999`;
+- `transcriber` — the Rust application, the window opens on the host desktop.
 
 ## Models
 
