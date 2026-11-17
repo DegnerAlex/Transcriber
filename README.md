@@ -2,6 +2,8 @@
 
 A desktop app that turns speech into text: talk into your microphone — or capture the audio playing through a system output device — and the recognized text is automatically typed into whatever application has focus. Runs in Docker with CUDA GPU support.
 
+<img width="640" height="480" alt="Bildschirmfoto_20261117_211430" src="https://github.com/user-attachments/assets/1d8fc098-cd6f-40d2-969e-ee0ea694daaf" />
+
 ## Features
 
 - **Audio capture**:
