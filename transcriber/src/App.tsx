@@ -649,7 +649,7 @@ class App extends Component<Record<string, never>, AppState> {
                             <span
                                 className={
                                     "tag " +
-                                    (backend === "gpu" ? "is-success" : "is-warning")
+                                    (backend === "gpu" ? "tag-gpu" : "tag-cpu")
                                 }
                                 title={
                                     backend === "gpu"

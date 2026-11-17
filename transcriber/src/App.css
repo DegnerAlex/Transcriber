@@ -271,3 +271,14 @@ section.compact .container {
     padding: 0.15rem 0.6rem;
     font-size: 0.72rem;
 }
+
+/* Backend badge: light green for GPU, yellow for CPU */
+.tag-gpu {
+    background-color: #4caf50;
+    color: #ffffff;
+}
+
+.tag-cpu {
+    background-color: #946c00;
+    color: #fffbea;
+}
