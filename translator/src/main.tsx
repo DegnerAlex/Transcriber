@@ -1,6 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "bulma/css/bulma.min.css";
 import App from "./App";
+
+// Let Bulma 1.x follow the system color scheme.
+document.documentElement.dataset.theme = window.matchMedia(
+  "(prefers-color-scheme: dark)",
+).matches
+  ? "dark"
+  : "light";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -56,3 +56,40 @@ RUN apt-get install -y \
 RUN curl -sL https://deb.nodesource.com/setup_22.x | bash - && \
         apt-get install -y nodejs && \
         npm install --global --allow-scripts=pnpm pnpm
+
+# CUDA 13.1 toolkit (nvcc) + runtime libs for whisper.cpp GGML_CUDA.
+# The ubuntu2404 NVIDIA repo is used because there is no 26.04 repo yet;
+# the binaries are glibc-forward compatible with 26.04.
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends gnupg && \
+    wget -qO- https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/3bf863cc.pub | \
+      gpg --dearmor --yes -o /usr/share/keyrings/cuda-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /" \
+      > /etc/apt/sources.list.d/cuda.list && \
+    apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends \
+      cuda-nvcc-13-1 \
+      cuda-cudart-13-1 \
+      cuda-cudart-dev-13-1 \
+      libcublas-13-1 \
+      libcublas-dev-13-1 && \
+    rm -rf /var/lib/apt/lists/* && \
+    echo "/usr/local/cuda-13.1/lib64" > /etc/ld.so.conf.d/cuda.conf && \
+    ldconfig
+
+ENV CUDA_HOME=/usr/local/cuda-13.1
+ENV PATH="/usr/local/cuda-13.1/bin:${PATH}"
+
+# nvcc 13.1 cannot parse GCC 15 headers (Ubuntu 26.04 default), so CUDA
+# compilation needs an older host compiler.
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends g++-14 && \
+    rm -rf /var/lib/apt/lists/*
+ENV CUDAHOSTCXX=/usr/bin/g++-14
+ENV NVCC_CCBIN=/usr/bin/g++-14
+
+# glibc 2.42 added C23 math functions (rsqrt, powr, rootn) that conflict with
+# CUDA's own crt/math_functions.h declarations. Hide them from nvcc compiles
+# only (__CUDACC__), leaving regular builds untouched.
+RUN sed -i 's/^#if __GLIBC_USE (IEC_60559_FUNCS_EXT_C23)/#if __GLIBC_USE (IEC_60559_FUNCS_EXT_C23) \&\& !defined(__CUDACC__)/' \
+    /usr/include/x86_64-linux-gnu/bits/mathcalls.h
