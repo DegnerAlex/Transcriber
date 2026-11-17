@@ -1,7 +1,8 @@
 # Transcriber
 
 A desktop app that turns speech into text: talk into your microphone — or capture the audio playing through a system output device — and the recognized text is automatically typed into whatever application has focus. Runs in Docker with CUDA GPU support.
-<img width="800" height="600" alt="Bildschirmfoto_20261117_220539" src="https://github.com/user-attachments/assets/604a82c4-96ac-4a69-9f3a-ff60eb50d35f" />
+
+<img width="800" height="600" alt="Bildschirmfoto_20261117_220925" src="https://github.com/user-attachments/assets/aa0d075b-0fbe-4aa0-b6e5-4f4f232166be" />
 
 
 ## Features
