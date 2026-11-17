@@ -88,6 +88,17 @@ RUN apt-get update -qq && \
 ENV CUDAHOSTCXX=/usr/bin/g++-14
 ENV NVCC_CCBIN=/usr/bin/g++-14
 
+# PipeWire client library for the cpal pipewire host (lets us capture the
+# audio playing through output devices / sinks for transcription).
+# pipewire-bin provides the client-side SPA modules and configs that the
+# libpipewire connection needs (without them host init fails silently).
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends \
+      libpipewire-0.3-dev \
+      libpipewire-0.3-0 \
+      pipewire-bin && \
+    rm -rf /var/lib/apt/lists/*
+
 # glibc 2.42 added C23 math functions (rsqrt, powr, rootn) that conflict with
 # CUDA's own crt/math_functions.h declarations. Hide them from nvcc compiles
 # only (__CUDACC__), leaving regular builds untouched.

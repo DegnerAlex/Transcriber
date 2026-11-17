@@ -16,12 +16,25 @@ export interface AudioInputDevice {
   defaultConfig: AudioInputConfig | null;
 }
 
+export interface AudioOutputDevice {
+  name: string;
+  deviceType: string;
+  interface: string;
+  isDefault: boolean;
+}
+
 interface DeviceListProps {
   devices: AudioInputDevice[];
   selected: AudioInputDevice | null;
   error: string | null;
   /** Called when the user clicks a device row (toggle selection). */
   onToggle: (device: AudioInputDevice) => void;
+  /** Re-enumerate the device lists. */
+  onRefresh: () => void;
+  /** Output devices (sinks) that can be captured for transcription. */
+  outputs: AudioOutputDevice[];
+  selectedOutput: string | null;
+  onToggleOutput: (device: AudioOutputDevice) => void;
 }
 
 /** Human-readable summary line for a device, e.g.
@@ -42,10 +55,33 @@ function describeDevice(device: AudioInputDevice): string | null {
 /** The list of audio input devices; clicking a row toggles its selection. */
 export class DeviceList extends Component<DeviceListProps> {
   render() {
-    const { devices, selected, error, onToggle } = this.props;
+    const {
+      devices,
+      selected,
+      error,
+      onToggle,
+      onRefresh,
+      outputs,
+      selectedOutput,
+      onToggleOutput,
+    } = this.props;
 
     return (
       <div className="devices-section">
+        <div className="level is-mobile mb-1">
+          <div className="level-left">
+            <span className="has-text-weight-semibold is-size-6">Audio Input</span>
+          </div>
+          <div className="level-right">
+            <button
+              type="button"
+              className="button is-small is-outlined is-info"
+              onClick={onRefresh}
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
         {error && (
           <p className="notification is-danger is-light">
             Error: {error}
@@ -69,15 +105,54 @@ export class DeviceList extends Component<DeviceListProps> {
                 className={"device-item" + (isSelected ? " is-selected" : "")}
                 onClick={() => onToggle(device)}
               >
-                <span className="has-text-weight-semibold">
-                  {device.name}
-                </span>
-                {device.isDefault && <span className="tag is-info">default</span>}
+                <div className="device-line">
+                  <span className="device-name">
+                    {device.name}
+                  </span>
+                  {device.isDefault && (
+                    <span className="tag is-info">default</span>
+                  )}
+                </div>
                 {meta && <span className="device-meta">{meta}</span>}
               </li>
             );
           })}
         </ul>
+
+        {outputs.length > 0 && (
+          <div className="mt-2">
+            <div className="has-text-weight-semibold mb-1">Audio output</div>
+            <ul className="device-list">
+              {outputs.map((device) => {
+                const isSelected = selectedOutput === device.name;
+
+                return (
+                  <li
+                    key={`out·${device.name}`}
+                    className={"device-item" + (isSelected ? " is-selected" : "")}
+                    onClick={() => onToggleOutput(device)}
+                  >
+                    <div className="device-line">
+                      <span className="device-name">
+                        {device.name === "default_sink"
+                          ? "System default output"
+                          : device.name}
+                      </span>
+                      {device.isDefault && (
+                        <span className="tag is-info">default</span>
+                      )}
+                    </div>
+                    <span className="device-meta">
+                      {[device.deviceType, device.interface]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </div>
     );
   }

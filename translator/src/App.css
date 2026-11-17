@@ -1,116 +1,197 @@
-/* App-specific tweaks on top of Bulma */
+/* App-specific tweaks on top of stock Bulma */
 
 /* Global compaction: scale the whole Bulma rem-based layout down. */
 html {
-  font-size: 14px;
+    font-size: 14px;
 }
 
-.compact {
-  padding: 0.75rem 1rem;
+html, body, #root {
+    height: 100%;
 }
 
-.devices-section {
-  margin-top: 0.25rem;
+/* ---- Layout (two columns, full height) ---- */
+
+section.compact {
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
 }
 
-.device-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+section.compact .container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
-.device-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid rgba(127, 127, 127, 0.25);
-  word-break: break-word;
-  cursor: pointer;
+.app-columns {
+    flex: 1;
+    display: flex;
+    align-items: stretch;
+    gap: 0.75rem;
+    height: calc(100vh - 1.5rem);
+    min-height: 0;
 }
 
-.device-item:hover {
-  background-color: rgba(127, 127, 127, 0.12);
+.app-column-left {
+    flex: 1 1 58%;
+    min-width: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
 }
 
-.device-item.is-selected {
-  background-color: rgba(62, 142, 208, 0.18);
-}
-
-.device-item:last-child {
-  border-bottom: none;
-}
-
-.device-name {
-  font-weight: 600;
-}
-
-.device-meta {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 0.75rem;
-  opacity: 0.7;
-  text-align: right;
-}
-
-.waveform {
-  width: 100%;
-  height: 90px;
-  display: block;
-  border-radius: 6px;
-  background-color: rgba(127, 127, 127, 0.08);
-}
-
-.waveform.is-idle {
-  opacity: 0.45;
-}
-
-.gain-slider {
-  flex: 1;
-  accent-color: #3e8ed0;
-}
-
-/* Language picker: chip buttons, expanded while choosing. */
-.language-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-}
-
-.language-chips .button {
-  margin: 0;
-  padding: 0.2rem 0.6rem;
-  font-size: 0.75rem;
-  border-radius: 999px;
-}
-
-.gain-value {
-  min-width: 3.5rem;
-  text-align: right;
-}
-
-/* Keep the device list compact so the live panel stays visible. */
-.device-list-scroll {
-  max-height: 42vh;
-  overflow-y: auto;
+.app-column-right {
+    flex: 1 1 42%;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .live-panel {
-  margin-bottom: 0.75rem;
+    margin-bottom: 0.75rem;
 }
 
-.transcript {
-  white-space: pre-wrap;
-  max-height: 8rem;
-  min-height: 3.5rem;
-  overflow-y: auto;
-  font-size: 0.85rem;
-  padding: 0.5rem;
-  border-radius: 6px;
-  background-color: rgba(127, 127, 127, 0.1);
+.transcript-box {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-top: 0.25rem;
 }
 
-.transcript.is-idle {
-  opacity: 0.45;
-  font-style: italic;
+.transcript-box .transcript {
+    flex: 1 1 auto;
+    min-height: 6rem;
+}
+
+.list-header {
+    font-weight: 600;
+}
+
+.devices-section {
+    margin-top: 0.25rem;
+}
+
+/* ---- Device lists ---- */
+
+.device-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.device-list-scroll {
+    max-height: 30vh;
+    overflow-y: auto;
+}
+
+.device-item {
+    padding: 0.3rem 0.5rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.35);
+}
+
+.device-item:last-child {
+    border-bottom: none;
+}
+
+.device-item:hover {
+    background-color: rgba(127, 127, 127, 0.12);
+}
+
+.device-item.is-selected {
+    background-color: rgba(62, 142, 208, 0.18);
+}
+
+.device-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+}
+
+.device-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+.device-meta {
+    font-size: 0.72rem;
+    opacity: 0.75;
+}
+
+/* ---- Live panel ---- */
+
+.waveform {
+    width: 100%;
+    height: 90px;
+    display: block;
+    border-radius: 6px;
+    background-color: rgba(127, 127, 127, 0.08);
+}
+
+.waveform.is-idle {
+    opacity: 0.45;
+}
+
+.gain-slider {
+    flex: 1;
+}
+
+.gain-value {
+    min-width: 3.5rem;
+    text-align: right;
+}
+
+/* ---- Transcript field ---- */
+
+.transcript-chat {
+    flex: 1 1 auto;
+    min-height: 6rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background-color: rgba(127, 127, 127, 0.1);
+}
+
+.chat-message {
+    padding: 0.35rem 0.6rem;
+    border-radius: 8px;
+    background-color: rgba(127, 127, 127, 0.14);
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.chat-message.chat-partial {
+    opacity: 0.55;
+    font-style: italic;
+    background-color: transparent;
+    border: 1px dashed rgba(127, 127, 127, 0.4);
+}
+
+.chat-empty {
+    opacity: 0.5;
+    font-style: italic;
+    text-align: center;
+    padding: 0.5rem;
+}
+
+/* ---- Language / model chips ---- */
+
+.language-chips,
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.language-chips .button,
+.chip-row .button {
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
 }

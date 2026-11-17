@@ -31,6 +31,11 @@ export default defineConfig({
         watch: {
             // 3. tell Vite to ignore watching `src-tauri`
             ignored: ["**/src-tauri/**"],
+            // 4. inotify events are unreliable through the Docker bind mount
+            //    (edits were sometimes missed, serving stale modules) — poll
+            //    the filesystem instead.
+            usePolling: true,
+            interval: 300,
         },
     },
 } as UserConfig);

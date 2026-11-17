@@ -10,10 +10,24 @@ use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextPar
 /// Sample rate whisper.cpp expects.
 pub const SAMPLE_RATE: u32 = 16_000;
 
+/// Known directories that may contain whisper ggml model files.
+const MODEL_DIRS: [&str; 3] = ["models", "src-tauri/models", "/srv/src-tauri/models"];
+/// Preference order when several models are present (best first).
+const PREFERRED: [&str; 5] = [
+    "ggml-large-v3-turbo-q5_0.bin",
+    "ggml-large-v3-turbo.bin",
+    "ggml-medium-q5_0.bin",
+    "ggml-small-q5_1.bin",
+    "ggml-base.bin",
+];
+
 /// Lazily loaded whisper model. The context stays alive once loaded;
 /// a transcription state is created per run.
 pub struct WhisperEngine {
     model: Mutex<Option<LoadedModel>>,
+    /// Model file explicitly chosen in the UI. Once set it wins over the
+    /// env/default resolution on every transcription.
+    selected: Mutex<Option<String>>,
 }
 
 struct LoadedModel {
@@ -28,6 +42,15 @@ pub struct Transcription {
     pub segments: usize,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelOption {
+    /// File name of the model, e.g. "ggml-small-q5_1.bin".
+    pub name: String,
+    /// True when this model is the one currently loaded.
+    pub active: bool,
+}
+
 impl Default for WhisperEngine {
     fn default() -> Self {
         Self::new()
@@ -38,6 +61,7 @@ impl WhisperEngine {
     pub fn new() -> Self {
         Self {
             model: Mutex::new(None),
+            selected: Mutex::new(None),
         }
     }
 
@@ -53,22 +77,11 @@ impl WhisperEngine {
                 candidates.push(PathBuf::from(env));
             }
         }
-        // Preference order: large-v3-turbo quantized > large-v3-turbo >
-        // medium quantized > small quantized > base.
-        const PREFERRED: [&str; 5] = [
-            "ggml-large-v3-turbo-q5_0.bin",
-            "ggml-large-v3-turbo.bin",
-            "ggml-medium-q5_0.bin",
-            "ggml-small-q5_1.bin",
-            "ggml-base.bin",
-        ];
-        const DIRS: [&str; 2] = ["models", "src-tauri/models"];
         for name in PREFERRED {
-            for dir in DIRS {
+            for dir in MODEL_DIRS {
                 candidates.push(PathBuf::from(format!("{dir}/{name}")));
             }
         }
-        candidates.push(PathBuf::from("/srv/src-tauri/models/ggml-base.bin"));
 
         candidates
             .iter()
@@ -84,6 +97,15 @@ impl WhisperEngine {
                         .join(", ")
                 )
             })
+    }
+
+    /// True when NVIDIA CUDA device nodes are exposed to this process (they
+    /// are injected by nvidia-container-toolkit). Without them the CUDA
+    /// backend cannot initialize, so we ask whisper to run on the CPU
+    /// instead. If the GPU disappears later or CUDA init fails at runtime,
+    /// ggml also falls back to CPU on its own.
+    fn gpu_available() -> bool {
+        Path::new("/dev/nvidia-uvm").exists() && Path::new("/dev/nvidiactl").exists()
     }
 
     /// Load the model into `slot` if not loaded yet (or if an explicit
@@ -123,20 +145,11 @@ impl WhisperEngine {
         Ok(())
     }
 
-    /// True when NVIDIA CUDA device nodes are exposed to this process (they
-    /// are injected by nvidia-container-toolkit). Without them the CUDA
-    /// backend cannot initialize, so we ask whisper to run on the CPU
-    /// instead. If the GPU disappears later or CUDA init fails at runtime,
-    /// ggml also falls back to CPU on its own.
-    fn gpu_available() -> bool {
-        Path::new("/dev/nvidia-uvm").exists() && Path::new("/dev/nvidiactl").exists()
-    }
-
     /// Load the default model eagerly (called at app startup, off the main
-    /// thread) so the first Transcribe click does not pay the load cost.
+    /// thread) so the first transcription does not pay the load cost.
     pub fn preload(&self) -> Result<(), String> {
         let mut guard = self.model.lock().unwrap();
-        Self::load_into(&mut guard, None)
+        Self::load_into(&mut guard, self.selected.lock().unwrap().as_deref())
     }
 
     /// Transcribe raw mono samples (16 kHz after [`resample_to_16k`]).
@@ -150,7 +163,8 @@ impl WhisperEngine {
             return Err("no audio captured yet — select a device and speak first".into());
         }
         let mut guard = self.model.lock().unwrap();
-        Self::load_into(&mut guard, None)?;
+        let selected = self.selected.lock().unwrap().clone();
+        Self::load_into(&mut guard, selected.as_deref())?;
         let loaded = guard.as_ref().unwrap();
         let mut state = loaded.ctx.create_state().map_err(|e| e.to_string())?;
 
@@ -183,6 +197,79 @@ impl WhisperEngine {
             text: combined.trim().to_string(),
             segments: count,
         })
+    }
+
+    /// ggml model files found in the known model directories, sorted best
+    /// first. `active` marks the model currently loaded.
+    pub fn available_models(&self) -> Vec<ModelOption> {
+        let loaded_name = self
+            .model
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|loaded| {
+                loaded
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        let mut found: Vec<String> = Vec::new();
+        for dir in MODEL_DIRS {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with("ggml-")
+                    && name.ends_with(".bin")
+                    && !found.contains(&name)
+                {
+                    found.push(name);
+                }
+            }
+        }
+        // Best models first, the rest alphabetically after them.
+        found.sort_by(|a, b| {
+            let rank = |name: &str| {
+                PREFERRED
+                    .iter()
+                    .position(|p| *p == name)
+                    .unwrap_or(usize::MAX)
+            };
+            rank(a).cmp(&rank(b)).then_with(|| a.cmp(b))
+        });
+
+        found
+            .into_iter()
+            .map(|name| ModelOption {
+                active: name == loaded_name,
+                name,
+            })
+            .collect()
+    }
+
+    /// Switch the transcription model at runtime. Reloads the context if the
+    /// requested model differs from the loaded one, and remembers the choice
+    /// so subsequent transcriptions keep using it.
+    pub fn select_model(&self, name: &str) -> Result<(), String> {
+        if !name.starts_with("ggml-") || !name.ends_with(".bin") {
+            return Err(format!("invalid model name: {name}"));
+        }
+        for dir in MODEL_DIRS {
+            let path = PathBuf::from(format!("{dir}/{name}"));
+            if path.is_file() {
+                let mut guard = self.model.lock().unwrap();
+                let path_str = path.to_string_lossy().into_owned();
+                Self::load_into(&mut guard, Some(path_str.as_str()))?;
+                *self.selected.lock().unwrap() = Some(path_str);
+                println!("[whisper] model switched to {name}");
+                return Ok(());
+            }
+        }
+        Err(format!("model file not found: {name}"))
     }
 
     /// Language codes understood by whisper, as exposed by the whisper.cpp
