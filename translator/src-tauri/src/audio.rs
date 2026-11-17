@@ -328,6 +328,16 @@ impl VadState {
     }
 }
 
+/// Info about the device the capture monitor is currently running on.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveMonitor {
+    /// "alsa" (input device) or "pipewire" (output device monitor capture).
+    pub host: String,
+    pub driver: Option<String>,
+    pub name: String,
+}
+
 /// Stream handle kept alive while the user is watching a device, plus the
 /// software input gain (in percent, 100 = unity) applied to captured samples,
 /// a rolling buffer of captured audio, and the VAD state machine that slices
@@ -342,6 +352,9 @@ pub struct AudioMonitor {
     /// Incremented every time a new monitor stream starts; stale transcription
     /// workers (from a replaced stream) exit when they see a newer generation.
     pub generation: Arc<AtomicU64>,
+    /// The device the monitor is currently capturing from (survives webview
+    /// reloads — the Rust process keeps the stream alive).
+    pub active_device: Mutex<Option<ActiveMonitor>>,
 }
 
 /// Rolling capture buffer fed by the monitor stream. Stores downmixed mono
@@ -401,6 +414,7 @@ impl Default for AudioMonitor {
             vad: Arc::new(Mutex::new(VadState::new())),
             language: Arc::new(Mutex::new("auto".to_string())),
             generation: Arc::new(AtomicU64::new(0)),
+            active_device: Mutex::new(None),
         }
     }
 }
@@ -666,6 +680,11 @@ pub fn start_audio_monitor(
 
     stream.play().map_err(|e| e.to_string())?;
     *state.stream.lock().unwrap() = Some(stream);
+    *state.active_device.lock().unwrap() = Some(ActiveMonitor {
+        host: host.as_deref().unwrap_or("alsa").to_string(),
+        driver: driver.clone(),
+        name: name.clone(),
+    });
     Ok(())
 }
 
@@ -673,6 +692,15 @@ pub fn start_audio_monitor(
 #[tauri::command]
 pub fn stop_audio_monitor(state: State<'_, AudioMonitor>) {
     *state.stream.lock().unwrap() = None;
+    *state.active_device.lock().unwrap() = None;
+}
+
+/// The device the capture monitor is currently running on (None when
+/// stopped). Lets the frontend restore its selection after a webview reload —
+/// the Rust process keeps the stream alive across reloads.
+#[tauri::command]
+pub fn get_active_monitor(state: State<'_, AudioMonitor>) -> Option<ActiveMonitor> {
+    state.active_device.lock().unwrap().clone()
 }
 
 /// Adjust the software input gain (percent, 0..=400, 100 = unity) of the

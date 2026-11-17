@@ -1,4 +1,6 @@
 import {Component, createRef} from "react";
+import {FaCheck, FaCopy} from "react-icons/fa6";
+import {writeText} from "@tauri-apps/plugin-clipboard-manager";
 import {invoke} from "@tauri-apps/api/core";
 import {listen} from "@tauri-apps/api/event";
 import {getCurrentWindow} from "@tauri-apps/api/window";
@@ -33,6 +35,12 @@ interface AppState {
 interface TranscriptionPayload {
     text: string;
     segments: number;
+}
+
+interface ActiveMonitorPayload {
+    host: string;
+    driver: string | null;
+    name: string;
 }
 
 class App extends Component<Record<string, never>, AppState> {
@@ -98,9 +106,41 @@ class App extends Component<Record<string, never>, AppState> {
         const autoType = this.loadSetting<boolean>("translator.autoType", true);
         const language = this.loadSetting<string>("translator.language", "auto");
         const model = this.loadSetting<string | null>("translator.model", null);
-        this.setState({gain, autoType, language});
+        this.setState({
+            gain,
+            autoType,
+            language,
+            transcriptLines: this.loadSetting<string[]>(
+                "translator.transcriptLines",
+                [],
+            ),
+        });
 
         this.refreshDevices();
+        // Sync the device selection with the backend: the Rust process keeps
+        // the capture monitor running across webview reloads, so the UI must
+        // reflect the device it is actually capturing from.
+        invoke<ActiveMonitorPayload | null>("get_active_monitor")
+            .then((active) => {
+                if (!active) return;
+                if (active.host === "pipewire") {
+                    this.setState({selectedOutput: active.name});
+                } else {
+                    this.setState({
+                        selected: {
+                            name: active.name,
+                            driver: active.driver,
+                            manufacturer: null,
+                            deviceType: "",
+                            interface: "",
+                            isDefault: false,
+                            defaultConfig: null,
+                        },
+                    });
+                }
+            })
+            .catch(() => {
+            });
 
         // Track whether the translator window itself has focus: auto-typing is
         // suppressed while it does, so phrases are never typed into this app.
@@ -180,6 +220,13 @@ class App extends Component<Record<string, never>, AppState> {
         ) {
             const chat = this.chatRef.current;
             if (chat) chat.scrollTop = chat.scrollHeight;
+            // Persist the transcript so it survives app restarts.
+            if (prevState.transcriptLines !== this.state.transcriptLines) {
+                this.saveSetting(
+                    "translator.transcriptLines",
+                    this.state.transcriptLines,
+                );
+            }
         }
 
         if (next) {
@@ -371,6 +418,37 @@ class App extends Component<Record<string, never>, AppState> {
         this.saveSetting("translator.autoType", autoType);
     };
 
+    private copyTranscript = async (): Promise<void> => {
+        const lines = this.state.transcriptLines;
+        if (lines.length === 0) return;
+        const text = lines.join("\n");
+        try {
+            // navigator.clipboard throws NotAllowedError inside WKWebView —
+            // the native clipboard plugin is the reliable path in Tauri.
+            await writeText(text);
+        } catch {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch {
+                // Last resort: legacy execCommand fallback (WebKit honors it
+                // without clipboard permissions).
+                const area = document.createElement("textarea");
+                area.value = text;
+                area.style.position = "fixed";
+                area.style.opacity = "0";
+                document.body.appendChild(area);
+                area.focus();
+                area.select();
+                document.execCommand("copy");
+                area.remove();
+            }
+        }
+        this.setState({copied: true});
+        window.setTimeout(() => {
+            if (!this.disposed) this.setState({copied: false});
+        }, 2000);
+    };
+
     private clearTranscript = (): void => {
         this.setState({transcriptLines: [], partial: null, typeError: null});
     };
@@ -396,6 +474,7 @@ class App extends Component<Record<string, never>, AppState> {
             transcriptLines,
             partial,
             typeError,
+            copied,
         } = this.state;
 
         return (
@@ -431,47 +510,8 @@ class App extends Component<Record<string, never>, AppState> {
                             />
                             <span className="is-size-7 gain-value">{Math.round(gain)}%</span>
                         </div>
-                        <div className="is-flex is-align-items-center mt-2">
-                            <span className="is-size-7 has-text-grey mr-2">Model</span>
-                            {modelsError && (
-                                <span className="is-size-7 has-text-danger">{modelsError}</span>
-                            )}
-                            <button
-                                type="button"
-                                title="Switch transcription model"
-                                className="button is-small is-light"
-                                onClick={() =>
-                                    this.setState((state) => ({modelsOpen: !state.modelsOpen}))
-                                }
-                            >
-                                {models.find((m) => m.active)?.name.replace(/^ggml-/, "").replace(/\.bin$/, "") ||
-                                    "…"}
-                            </button>
-                        </div>
-                        {modelsOpen && (
-                            <div className="chip-row mt-1">
-                                {models.map((m) => (
-                                    <button
-                                        key={m.name}
-                                        type="button"
-                                        disabled={modelSwitching}
-                                        className={
-                                            "button is-small" + (m.active ? " is-info" : " is-light")
-                                        }
-                                        onClick={() => this.selectModel(m.name)}
-                                    >
-                                        {m.name.replace(/^ggml-/, "").replace(/\.bin$/, "")}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                        <div className="is-flex is-align-items-center mt-2">
+                        <div className="is-flex is-align-items-center flex-wrap mt-2">
                             <span className="is-size-7 has-text-grey mr-2">Language</span>
-                            {languagesError && (
-                                <span className="is-size-7 has-text-danger">
-                  {languagesError}
-                </span>
-                            )}
                             <button
                                 type="button"
                                 title="Change transcription language"
@@ -483,6 +523,18 @@ class App extends Component<Record<string, never>, AppState> {
                                 }
                             >
                                 {language}
+                            </button>
+                            <span className="is-size-7 has-text-grey ml-2 mr-2">Model</span>
+                            <button
+                                type="button"
+                                title="Switch transcription model"
+                                className="button is-small is-light"
+                                onClick={() =>
+                                    this.setState((state) => ({modelsOpen: !state.modelsOpen}))
+                                }
+                            >
+                                {models.find((m) => m.active)?.name.replace(/^ggml-/, "").replace(/\.bin$/, "") ||
+                                    "\u2026"}
                             </button>
                         </div>
                         {languagesOpen && (
@@ -505,6 +557,23 @@ class App extends Component<Record<string, never>, AppState> {
                                 ))}
                             </div>
                         )}
+                        {modelsOpen && (
+                            <div className="chip-row mt-1">
+                                {models.map((m) => (
+                                    <button
+                                        key={m.name}
+                                        type="button"
+                                        disabled={modelSwitching}
+                                        className={
+                                            "button is-small" + (m.active ? " is-info" : " is-light")
+                                        }
+                                        onClick={() => this.selectModel(m.name)}
+                                    >
+                                        {m.name.replace(/^ggml-/, "").replace(/\.bin$/, "")}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
                     <DeviceList
                         devices={devices}
@@ -520,7 +589,35 @@ class App extends Component<Record<string, never>, AppState> {
 
                     <div className="app-column-right">
                         <div className="box p-3 transcript-box">
-                            <div className="is-size-7 has-text-weight-semibold mb-1">Transcript</div>
+                            <div className="is-flex is-justify-content-space-between is-align-items-center mb-1">
+                                <div className="is-size-7 has-text-weight-semibold">Transcript</div>
+                                <div className="is-flex is-align-items-center">
+                                    <button
+                                        type="button"
+                                        className={
+                                            "button is-small mr-2" +
+                                            (autoType ? " is-success" : " is-light")
+                                        }
+                                        title={
+                                            autoType
+                                                ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
+                                                : "Insert is OFF — click to type each phrase into the focused application automatically."
+                                        }
+                                        onClick={() => this.toggleAutoType()}
+                                    >
+                                        Insert: {autoType ? "on" : "off"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="icon-button"
+                                        title="Copy all transcribed text"
+                                        disabled={transcriptLines.length === 0}
+                                        onClick={() => this.copyTranscript()}
+                                    >
+                                        {copied ? <FaCheck/> : <FaCopy/>}
+                                    </button>
+                                </div>
+                            </div>
                             <div className="transcript-chat" ref={this.chatRef}>
                                 {transcriptLines.length === 0 && !partial && (
                                     <div className="chat-empty">Transcribed text will appear here</div>
@@ -536,27 +633,12 @@ class App extends Component<Record<string, never>, AppState> {
                                 <button
                                     type="button"
                                     className="button is-small is-light"
+                                    style={{marginLeft: "auto"}}
                                     title="Discard the transcript"
                                     disabled={transcriptLines.length === 0 && !partial}
                                     onClick={() => this.clearTranscript()}
                                 >
                                     Clear
-                                </button>
-                                <button
-                                    type="button"
-                                    className={
-                                        "button is-small" +
-                                        (autoType ? " is-success" : " is-light")
-                                    }
-                                    style={{marginLeft: "auto"}}
-                                    title={
-                                        autoType
-                                            ? "Insert is ON — each phrase is typed into the focused application. Click to turn off."
-                                            : "Insert is OFF — click to type each phrase into the focused application automatically."
-                                    }
-                                    onClick={() => this.toggleAutoType()}
-                                >
-                                    Insert: {autoType ? "on" : "off"}
                                 </button>
                             </div>
                             {typeError && (

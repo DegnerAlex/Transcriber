@@ -25,6 +25,7 @@ fn debug_log(message: String) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(audio::AudioMonitor::default())
         .manage(std::sync::Arc::new(whisper::WhisperEngine::new()))
         .setup(|app| {
@@ -45,6 +46,7 @@ pub fn run() {
             audio::start_audio_monitor,
             audio::stop_audio_monitor,
             audio::set_audio_monitor_gain,
+            audio::get_active_monitor,
             transcription::set_transcription_language,
             transcription::list_transcription_languages,
             transcription::list_available_models,
