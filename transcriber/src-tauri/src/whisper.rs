@@ -58,6 +58,19 @@ impl Default for WhisperEngine {
 }
 
 impl WhisperEngine {
+    /// Directories scanned for ggml models. The exe-relative dir covers the
+    /// AppImage layout (the binary is at AppDir/usr/bin, the models are
+    /// bundled at AppDir/usr/bin/models).
+    fn model_dirs() -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = MODEL_DIRS.iter().map(PathBuf::from).collect();
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(exe_dir) = exe.parent() {
+                dirs.insert(0, exe_dir.join("models"));
+            }
+        }
+        dirs
+    }
+
     pub fn new() -> Self {
         Self {
             model: Mutex::new(None),
@@ -87,8 +100,8 @@ impl WhisperEngine {
             }
         }
         for name in PREFERRED {
-            for dir in MODEL_DIRS {
-                candidates.push(PathBuf::from(format!("{dir}/{name}")));
+            for dir in Self::model_dirs() {
+                candidates.push(dir.join(name));
             }
         }
 
@@ -226,14 +239,7 @@ impl WhisperEngine {
             .unwrap_or_default();
 
         let mut found: Vec<String> = Vec::new();
-        let mut dirs: Vec<PathBuf> = MODEL_DIRS.iter().map(PathBuf::from).collect();
-        // The exe-relative dir covers the AppImage layout (usr/bin/models).
-        if let Ok(exe) = std::env::current_exe() {
-            if let Some(exe_dir) = exe.parent() {
-                dirs.insert(0, exe_dir.join("models"));
-            }
-        }
-        for dir in dirs {
+        for dir in Self::model_dirs() {
             let Ok(entries) = std::fs::read_dir(dir) else {
                 continue;
             };
@@ -274,8 +280,8 @@ impl WhisperEngine {
         if !name.starts_with("ggml-") || !name.ends_with(".bin") {
             return Err(format!("invalid model name: {name}"));
         }
-        for dir in MODEL_DIRS {
-            let path = PathBuf::from(format!("{dir}/{name}"));
+        for dir in Self::model_dirs() {
+            let path = dir.join(name);
             if path.is_file() {
                 let mut guard = self.model.lock().unwrap();
                 let path_str = path.to_string_lossy().into_owned();
