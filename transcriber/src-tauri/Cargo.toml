@@ -29,6 +29,7 @@ whisper-rs = { version = "0.16", features = ["cuda"] }
 whisper-rs-sys = "0.15"
 cpal = { version = "0.18", features = ["pipewire"] }
 enigo = "0.6"
+arboard = "3"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
