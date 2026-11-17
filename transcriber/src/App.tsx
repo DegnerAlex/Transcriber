@@ -530,6 +530,16 @@ class App extends Component<Record<string, never>, AppState> {
         }, 2000);
     };
 
+    /** Remove one finalized message; the transcript file is updated right
+     *  away (componentDidUpdate only persists to the settings store). */
+    private deleteLine = (index: number): void => {
+        const transcriptLines = this.state.transcriptLines.filter(
+            (_, i) => i !== index,
+        );
+        this.setState({transcriptLines});
+        invoke("save_transcript", {lines: transcriptLines}).catch(() => {});
+    };
+
     private clearTranscript = (): void => {
         this.setState({transcriptLines: [], partial: null, typeError: null});
         invoke("save_transcript", {lines: []}).catch(() => {});
@@ -622,6 +632,7 @@ class App extends Component<Record<string, never>, AppState> {
                     <TranscriptChat
                         lines={transcriptLines}
                         partial={partial}
+                        onDelete={this.deleteLine}
                     />
                     </div>
                     </div>

@@ -343,3 +343,40 @@ section.compact .container {
     width: 100%;
     text-align: left;
 }
+
+
+/* ---- Per-message delete button in the transcript chat ---- */
+
+.chat-message {
+    position: relative;
+}
+
+/* Reserve room at the right edge for the delete button. */
+.chat-message .chat-text {
+    padding-right: 1.5rem;
+}
+
+.chat-delete {
+    position: absolute;
+    top: 50%;
+    right: 0.25rem;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: rgba(127, 127, 127, 0.7);
+    cursor: pointer;
+    opacity: 0;
+    padding: 0.15rem 0.35rem;
+    line-height: 1;
+    border-radius: 3px;
+    transition: opacity 0.12s ease;
+}
+
+.chat-message:hover .chat-delete {
+    opacity: 1;
+}
+
+.chat-delete:hover {
+    color: #c0392b;
+    background-color: rgba(192, 57, 43, 0.1);
+}
