@@ -5,20 +5,6 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 <img width="800" height="600" alt="image" src="https://github.com/user-attachments/assets/1e73a37a-aea1-4a34-aef6-7b30cba8f041" />
 
 
-## Download
-
-Grab the ready-to-run AppImage from the [releases page](https://github.com/DegnerAlex/Transcriber/releases) — no installation needed, just download, `chmod +x` and run:
-
-```bash
-chmod +x Transcriber-*-linux-x86_64.AppImage
-./Transcriber-*-linux-x86_64.AppImage
-```
-
-- **[Latest release](https://github.com/DegnerAlex/Transcriber/releases/latest)** — `Transcriber-<version>-linux-x86_64.AppImage`, includes all whisper models (base / small / medium / large-v3-turbo) and the CUDA + Vulkan GPU runtimes;
-- every release page lists the checksums and the changelog (`--generate-notes` from the commit history).
-
-The AppImage requires only the NVIDIA driver (CUDA path) or a Vulkan driver (RADV/ANV ship with Mesa) on the target machine; on CPU-only systems it falls back automatically. Windows and macOS builds are planned (see the GPU/backend table below for the current platform support).
-
 ## Features
 
 ### Audio capture
@@ -97,15 +83,6 @@ Everything survives app restarts and container recreation:
 - the whole transcript chat (stored in `transcript.json` inside the app data directory, which is bind-mounted from the host),
 - the chat is not cleared by auto-insert — only by the **Clear** button.
 
-## Running
-
-```bash
-docker compose up frontend transcriber
-```
-
-- `frontend` — the Vite dev server on `http://localhost:9999`;
-- `transcriber` — the Rust application, the window opens on the host desktop.
-
 ## Models
 
 Stored in `transcriber/src-tauri/models/` (downloaded from [ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp)):
@@ -118,6 +95,31 @@ Stored in `transcriber/src-tauri/models/` (downloaded from [ggerganov/whisper.cp
 | `ggml-large-v3-turbo-q5_0.bin` | 574 MB | close to large-v3 |
 
 Pick one with the chips in the UI (the choice is remembered). On startup the best available model is loaded; the priority can be overridden via `WHISPER_MODEL_PATH`. Without a GPU the app automatically falls back to the CPU.
+
+## Running
+
+```bash
+docker compose up frontend transcriber
+```
+
+- `frontend` — the Vite dev server on `http://localhost:9999`;
+- `transcriber` — the Rust application, the window opens on the host desktop.
+
+
+## Download
+
+Grab the ready-to-run AppImage from the [releases page](https://github.com/DegnerAlex/Transcriber/releases) — no installation needed, just download, `chmod +x` and run:
+
+```bash
+chmod +x Transcriber-*-linux-x86_64.AppImage
+./Transcriber-*-linux-x86_64.AppImage
+```
+
+- **[Latest release](https://github.com/DegnerAlex/Transcriber/releases/latest)** — `Transcriber-<version>-linux-x86_64.AppImage`, includes all whisper models (base / small / medium / large-v3-turbo) and the CUDA + Vulkan GPU runtimes;
+- every release page lists the checksums and the changelog (`--generate-notes` from the commit history).
+
+The AppImage requires only the NVIDIA driver (CUDA path) or a Vulkan driver (RADV/ANV ship with Mesa) on the target machine; on CPU-only systems it falls back automatically. Windows and macOS builds are planned (see the GPU/backend table above for the current platform support).
+
 
 ## Libraries
 
