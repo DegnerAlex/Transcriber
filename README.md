@@ -52,22 +52,25 @@ Plus `auto` (language detection). The language is persisted across restarts and 
 
 ### GPU acceleration
 
-- whisper.cpp is built with the CUDA backend (`GGML_CUDA`) — transcription runs on the NVIDIA GPU;
-- the runtime CUDA libraries (`libcudart`, `libcublas`, `libcublasLt`) are bundled inside the AppImage; the NVIDIA driver (`libcuda.so`) comes from the target machine;
-- automatic CPU fallback when no GPU device nodes are present (`/dev/nvidia*` detection) or when CUDA initialization fails — the same build runs on GPU-only and CPU-only machines;
+- whisper.cpp is built with **both GPU backends**: `GGML_CUDA` (NVIDIA) and `GGML_VULKAN` (AMD, Intel, and NVIDIA as well) — the app picks the one matching the hardware;
+- NVIDIA: the runtime CUDA libraries (`libcudart`, `libcublas`, `libcublasLt`) are bundled inside the AppImage; the NVIDIA driver (`libcuda.so`) comes from the target machine;
+- AMD/Intel: transcription runs through Vulkan (`libvulkan` is bundled); the Vulkan driver comes from the target machine (RADV from Mesa is preinstalled on most Linux desktops);
+- automatic CPU fallback when no GPU device nodes are present (no `/dev/nvidia*`, no `/dev/kfd`) or when the backend fails to initialize — the same build runs on GPU-only and CPU-only machines;
 - model loading speed on the reference GPU (GTX 1650 SUPER): ~0.2–0.6 s regardless of model size;
 - the CUDA 13.1 toolkit supports Turing (sm_75) and newer — older GPUs fall back to the CPU.
 
 ### Supported GPUs
 
-| Compute capability | Architecture | Example GPUs | Status |
+| Backend | Vendor / family | Example GPUs | Status |
 |---|---|---|---|
-| NVIDIA (sm_75+) | Turing … Blackwell | GTX 16xx, RTX 20xx–50xx, T4, H100 | **supported** — tested on GTX 1650 SUPER |
-| AMD | — | RX series (ROCm not bundled) | **fallback** — runs on the CPU |
-| Intel | — | Arc series | **fallback** — runs on the CPU |
+| CUDA (sm_75+) | NVIDIA, Turing … Blackwell | GTX 16xx, RTX 20xx–50xx, T4, H100 | **supported** — tested on GTX 1650 SUPER |
+| Vulkan | NVIDIA (Turing+) | GTX 16xx, RTX 20xx–50xx | **supported** — alternative to CUDA |
+| Vulkan | AMD RDNA/CDNA | RX 5000+, Radeon VII, MI series | **supported** — requires RADV (Mesa) or the AMDGPU-pro driver |
+| Vulkan | Intel Arc / iGPU | Arc A/B series, Xe iGPU | **supported** — requires Mesa ANV |
 | CPU | — | any x86_64 machine | **fallback** — supported |
 
-\* pre-Turing NVIDIA cards (Maxwell, Pascal, Volta) are not supported by CUDA 13 — they fall back to the CPU.
+\* pre-Turing NVIDIA cards (Maxwell, Pascal, Volta) are not supported by CUDA 13 — on Vulkan-capable ones they still run through Vulkan, otherwise on the CPU.
+\* AMD/Intel: RADV/ANV drivers ship with Mesa on virtually every Linux distribution — no extra setup is needed.
 
 On unsupported GPUs the app runs on the CPU automatically (see GPU acceleration above).
 

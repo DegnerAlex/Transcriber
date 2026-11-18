@@ -88,6 +88,16 @@ RUN apt-get update -qq && \
 ENV CUDAHOSTCXX=/usr/bin/g++-14
 ENV NVCC_CCBIN=/usr/bin/g++-14
 
+# Vulkan for whisper.cpp GGML_VULKAN (AMD/Intel GPU support): headers +
+# loader for linking, glslc compiles the ggml compute shaders at build
+# time, libshaderc is linked into the binary for runtime shader compilation.
+RUN apt-get update -qq && \
+    apt-get install -y -qq --no-install-recommends \
+      libvulkan-dev \
+      libshaderc-dev \
+      glslc && \
+    rm -rf /var/lib/apt/lists/*
+
 # PipeWire client library for the cpal pipewire host (lets us capture the
 # audio playing through output devices / sinks for transcription).
 # pipewire-bin provides the client-side SPA modules and configs that the

@@ -2,28 +2,37 @@ import {Component} from "react";
 import {FaMicrochip} from "react-icons/fa6";
 
 interface BackendBadgeProps {
-    /** Transcription backend as reported by the engine: "gpu" or "cpu". */
+    /** Transcription backend as reported by the engine: "cuda", "vulkan"
+     *  or "cpu". */
     backend: string;
 }
 
-/** The GPU/CPU badge in the Language/Model row: green for CUDA, yellow
- *  for the CPU fallback. The backend is fixed at startup. */
+/** The backend badge in the Language/Model row: green "GPU CUDA" /
+ *  "GPU VULKAN" for the GPU paths, yellow "CPU" for the fallback. The
+ *  backend is fixed at startup. */
 export class BackendBadge extends Component<BackendBadgeProps> {
     render() {
         const {backend} = this.props;
-        const gpu = backend === "gpu";
+        const label =
+            backend === "cuda"
+                ? "GPU CUDA"
+                : backend === "vulkan"
+                    ? "GPU VULKAN"
+                    : "CPU";
+        const title =
+            backend === "cuda"
+                ? "Transcription runs on the NVIDIA GPU (CUDA)"
+                : backend === "vulkan"
+                    ? "Transcription runs on the GPU (Vulkan)"
+                    : "Transcription runs on the CPU";
         return (
             <span
-                className={"tag " + (gpu ? "tag-gpu" : "tag-cpu")}
-                title={
-                    gpu
-                        ? "Transcription runs on the NVIDIA GPU (CUDA)"
-                        : "Transcription runs on the CPU"
-                }
+                className={"tag " + (backend === "cpu" ? "tag-cpu" : "tag-gpu")}
+                title={title}
                 style={{marginLeft: "auto"}}
             >
                 <FaMicrochip style={{marginRight: "0.3rem"}}/>
-                {backend.toUpperCase()}
+                {label}
             </span>
         );
     }

@@ -127,7 +127,22 @@ impl WhisperEngine {
     /// instead. If the GPU disappears later or CUDA init fails at runtime,
     /// ggml also falls back to CPU on its own.
     fn gpu_available() -> bool {
-        Path::new("/dev/nvidia-uvm").exists() && Path::new("/dev/nvidiactl").exists()
+        Self::backend_kind() != "cpu"
+    }
+
+    /// Which GPU stack is present: "cuda" (NVIDIA device nodes), "vulkan"
+    /// (AMD/Intel — ROCm kernel node + a Vulkan ICD installed), or "cpu".
+    fn backend_kind() -> &'static str {
+        if Path::new("/dev/nvidia-uvm").exists() && Path::new("/dev/nvidiactl").exists() {
+            return "cuda";
+        }
+        // AMD and Intel expose their GPUs through /dev/kfd (ROCm/DRM); a
+        // Vulkan ICD (RADV from Mesa, or the vendor driver) must be
+        // installed for ggml-vulkan to find a device.
+        if Path::new("/dev/kfd").exists() {
+            return "vulkan";
+        }
+        "cpu"
     }
 
     /// Load the model into `slot` if not loaded yet (or if an explicit
@@ -148,7 +163,11 @@ impl WhisperEngine {
         println!(
             "[whisper] loading model from {} ({}) ...",
             path.display(),
-            if use_gpu { "CUDA GPU" } else { "CPU fallback" }
+            match Self::backend_kind() {
+                "cuda" => "GPU (CUDA)",
+                "vulkan" => "GPU (Vulkan)",
+                _ => "CPU fallback",
+            }
         );
         let started = std::time::Instant::now();
         let ctx = WhisperContext::new_with_params(
@@ -167,15 +186,11 @@ impl WhisperEngine {
         Ok(())
     }
 
-    /// Transcription backend: "gpu" when CUDA device nodes are available,
-    /// "cpu" otherwise. Fixed at startup — the backend cannot change while
-    /// the process is running.
+    /// Transcription backend reported to the UI: "cuda", "vulkan" or
+    /// "cpu". Fixed at startup — the backend cannot change while the
+    /// process is running.
     pub fn backend(&self) -> &'static str {
-        if Self::gpu_available() {
-            "gpu"
-        } else {
-            "cpu"
-        }
+        Self::backend_kind()
     }
 
     /// Load the default model eagerly (called at app startup, off the main
