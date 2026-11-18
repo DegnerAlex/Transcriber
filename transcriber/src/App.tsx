@@ -13,7 +13,7 @@ import {BackendBadge} from "./components/BackendBadge";
 import {SensitivitySlider} from "./components/SensitivitySlider";
 import type {AudioInputDevice, AudioOutputDevice} from "./components/DeviceList";
 import {Waveform} from "./components/Waveform";
-import "./App.css";
+import "./App.scss";
 
 interface AppState {
     devices: AudioInputDevice[];
