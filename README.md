@@ -5,6 +5,20 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 <img width="800" height="600" alt="Bildschirmfoto_20261117_220925" src="https://github.com/user-attachments/assets/aa0d075b-0fbe-4aa0-b6e5-4f4f232166be" />
 
 
+## Download
+
+Grab the ready-to-run AppImage from the [releases page](https://github.com/DegnerAlex/Transcriber/releases) — no installation needed, just download, `chmod +x` and run:
+
+```bash
+chmod +x Transcriber-*-linux-x86_64.AppImage
+./Transcriber-*-linux-x86_64.AppImage
+```
+
+- **[Latest release](https://github.com/DegnerAlex/Transcriber/releases/latest)** — `Transcriber-<version>-linux-x86_64.AppImage`, includes all whisper models (base / small / medium / large-v3-turbo) and the CUDA + Vulkan GPU runtimes;
+- every release page lists the checksums and the changelog (`--generate-notes` from the commit history).
+
+The AppImage requires only the NVIDIA driver (CUDA path) or a Vulkan driver (RADV/ANV ship with Mesa) on the target machine; on CPU-only systems it falls back automatically. Windows and macOS builds are planned (see the GPU/backend table below for the current platform support).
+
 ## Features
 
 ### Audio capture
