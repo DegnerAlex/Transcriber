@@ -27,25 +27,12 @@ mod transcription;
 mod typing;
 mod whisper;
 
-use tauri::{AppHandle, Manager};
+use tauri::Manager;
 
 /// Forward a debug message from the webview to the container stdout.
 #[tauri::command]
 fn debug_log(message: String) {
     println!("[ui] {message}");
-}
-
-/// Dismiss the splash screen and reveal the main window. Called by the
-/// frontend once the interface is rendered.
-#[tauri::command]
-fn close_splashscreen(app: AppHandle) {
-    if let Some(splash) = app.get_webview_window("splashscreen") {
-        let _ = splash.close();
-    }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.show();
-        let _ = main.set_focus();
-    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -84,8 +71,7 @@ pub fn run() {
             transcription::load_settings,
             transcription::select_transcription_model,
             typing::type_text,
-            debug_log,
-            close_splashscreen
+            debug_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

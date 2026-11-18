@@ -19,9 +19,68 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transcriber</title>
+    <style>
+      /* In-window splash screen: shown immediately, removed by App once
+         the restored UI is ready. */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        background: #f5f5f5;
+        color: #363636;
+        font-family: system-ui, sans-serif;
+        user-select: none;
+        cursor: default;
+      }
+
+      #splash .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      #splash .brand img {
+        width: 64px;
+        height: 64px;
+      }
+
+      #splash .brand h1 {
+        margin: 0;
+        font-size: 1.35rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+      }
+
+      #splash .spinner {
+        width: 22px;
+        height: 22px;
+        border: 3px solid rgba(0, 0, 0, 0.1);
+        border-top-color: #4caf50;
+        border-radius: 50%;
+        animation: splash-spin 0.9s linear infinite;
+      }
+
+      @keyframes splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
 
   <body>
+    <div id="splash">
+      <div class="brand">
+        <img src="/icon.png" alt="Transcriber icon" />
+        <h1>Transcriber</h1>
+      </div>
+      <div class="spinner"></div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

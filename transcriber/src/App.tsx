@@ -169,10 +169,12 @@ class App extends Component<Record<string, never>, AppState> {
                     ),
                 });
             });
-        // The restored UI is ready — dismiss the splash screen window and
-        // reveal the main window. Failure is harmless (no splash, e.g. after
-        // a webview reload in dev).
-        restore.finally(() => invoke("close_splashscreen").catch(() => {}));
+        // The restored UI is ready — dismiss the in-window splash overlay
+        // shown by index.html. It may already be gone (e.g. after a hot
+        // reload), which is harmless.
+        restore.finally(() => {
+            document.getElementById("splash")?.remove();
+        });
         // Sync the device selection with the backend: the Rust process keeps
         // the capture monitor running across webview reloads, so the UI must
         // reflect the device it is actually capturing from. Runs after the
