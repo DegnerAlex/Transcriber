@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import React from "react";
-import ReactDOM from "react-dom/client";
+import React from "preact/compat";
+import { createRoot } from "preact/compat/client";
 // import "bulma/css/bulma.min.css";
 import App from "./App";
 
@@ -24,7 +24,7 @@ document.documentElement.dataset.theme = window.matchMedia(
   ? "dark"
   : "light";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

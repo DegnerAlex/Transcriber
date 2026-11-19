@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import {Component} from "react";
+import {Component} from "preact/compat";
 import {FaCheck, FaCopy} from "react-icons/fa6";
 import {writeText} from "@tauri-apps/plugin-clipboard-manager";
 import {invoke} from "@tauri-apps/api/core";

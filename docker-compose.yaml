@@ -28,11 +28,8 @@ services:
       - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
       # PipeWire client looks for its socket in $XDG_RUNTIME_DIR/pipewire-0
       - PIPEWIRE_RUNTIME_DIR=${XDG_RUNTIME_DIR}
-      - RUST_BACKTRACE=full
       - DISPLAY=${DISPLAY}
       - WEBKIT_DISABLE_COMPOSITING_MODE=1
-      - WEBKIT_DEBUG=1
-      - CI=true
       # whisper.cpp ggml model for the transcription engine
       - WHISPER_MODEL_PATH=/srv/src-tauri/models/ggml-medium-q5_0.bin
       - NVIDIA_VISIBLE_DEVICES=all

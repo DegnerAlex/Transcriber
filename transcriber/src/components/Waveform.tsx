@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef } from "preact/compat";
 import { listen } from "@tauri-apps/api/event";
 
 interface LevelUpdate {

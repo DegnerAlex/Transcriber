@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import {Component, createRef} from "react";
+import {Component, createRef} from "preact/compat";
 import {invoke} from "@tauri-apps/api/core";
 
 interface LanguagePickerProps {
