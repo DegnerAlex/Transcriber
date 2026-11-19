@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <!-- Основной вертикальный градиент столбиков -->
+    <linearGradient id="barBodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#22B8FA" />
+      <stop offset="50%" stop-color="#149DF0" />
+      <stop offset="100%" stop-color="#0E84DE" />
+    </linearGradient>
+
+    <!-- Боковой объём (светлый блик слева, лёгкая тень справа) -->
+    <linearGradient id="barSideGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#68D8FF" stop-opacity="0.65" />
+      <stop offset="28%" stop-color="#23B7F9" stop-opacity="0" />
+      <stop offset="75%" stop-color="#0A6DC4" stop-opacity="0.15" />
+      <stop offset="100%" stop-color="#0753A4" stop-opacity="0.45" />
+    </linearGradient>
+
+    <!-- Эффект 3D-фаски (верхний светлый блик и нижняя тёмная грань) -->
+    <filter id="bevel3d" x="-15%" y="-10%" width="130%" height="120%">
+      <!-- Верхний внутренний блик -->
+      <feOffset dx="0" dy="2.5" in="SourceAlpha" result="offTop" />
+      <feGaussianBlur stdDeviation="1.5" in="offTop" result="blurTop" />
+      <feComposite operator="out" in="SourceAlpha" in2="blurTop" result="maskTop" />
+      <feFlood flood-color="#9BE8FF" flood-opacity="0.85" result="colorTop" />
+      <feComposite operator="in" in="colorTop" in2="maskTop" result="highlightTop" />
+
+      <!-- Нижняя внутренняя тень -->
+      <feOffset dx="0" dy="-2.5" in="SourceAlpha" result="offBot" />
+      <feGaussianBlur stdDeviation="1.5" in="offBot" result="blurBot" />
+      <feComposite operator="out" in="SourceAlpha" in2="blurBot" result="maskBot" />
+      <feFlood flood-color="#05458E" flood-opacity="0.7" result="colorBot" />
+      <feComposite operator="in" in="colorBot" in2="maskBot" result="shadowBot" />
+
+      <feMerge>
+        <feMergeNode in="SourceGraphic" />
+        <feMergeNode in="highlightTop" />
+        <feMergeNode in="shadowBot" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 9 объёмных вертикальных полос эквалайзера (без водяных знаков и фона) -->
+  <g filter="url(#bevel3d)">
+    <!-- Полоса 1 -->
+    <rect x="26" y="96.5" width="14.5" height="66" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="26" y="96.5" width="14.5" height="66" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 2 -->
+    <rect x="49.7" y="64" width="14.5" height="131.5" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="49.7" y="64" width="14.5" height="131.5" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 3 -->
+    <rect x="73.4" y="30.5" width="14.5" height="198" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="73.4" y="30.5" width="14.5" height="198" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 4 -->
+    <rect x="97.1" y="78" width="14.5" height="103.5" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="97.1" y="78" width="14.5" height="103.5" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 5 (центральная) -->
+    <rect x="120.8" y="110.5" width="14.5" height="38.5" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="120.8" y="110.5" width="14.5" height="38.5" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 6 -->
+    <rect x="144.5" y="64" width="14.5" height="131.5" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="144.5" y="64" width="14.5" height="131.5" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 7 -->
+    <rect x="168.2" y="30.5" width="14.5" height="198" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="168.2" y="30.5" width="14.5" height="198" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 8 -->
+    <rect x="191.9" y="76" width="14.5" height="107.5" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="191.9" y="76" width="14.5" height="107.5" rx="4.5" fill="url(#barSideGrad)" />
+
+    <!-- Полоса 9 -->
+    <rect x="215.5" y="104.5" width="14.5" height="50" rx="4.5" fill="url(#barBodyGrad)" />
+    <rect x="215.5" y="104.5" width="14.5" height="50" rx="4.5" fill="url(#barSideGrad)" />
+  </g>
+</svg>
