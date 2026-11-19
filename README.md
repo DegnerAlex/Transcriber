@@ -96,10 +96,10 @@ Stored in `transcriber/src-tauri/models/` (downloaded from [ggerganov/whisper.cp
 
 Pick one with the chips in the UI (the choice is remembered). On startup the best available model is loaded; the priority can be overridden via `WHISPER_MODEL_PATH`. Without a GPU the app automatically falls back to the CPU.
 
-## Running
+## Development
 
 ```bash
-docker compose up frontend transcriber
+docker compose up 
 ```
 
 - `frontend` — the Vite dev server on `http://localhost:9999`;
