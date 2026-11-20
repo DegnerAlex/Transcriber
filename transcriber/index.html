@@ -48,20 +48,26 @@
         height: 64px;
       }
 
+      /* Title in the logo's blue-violet gradient. */
       #splash .brand h1 {
         margin: 0;
         font-size: 1.35rem;
         font-weight: 600;
         letter-spacing: 0.04em;
+        background: linear-gradient(120deg, #68d8ff, #22b8fa 55%, #0e84de);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
       }
 
       #splash .spinner {
         width: 22px;
         height: 22px;
-        border: 3px solid rgba(155, 70, 218, 0.18);
-        border-top-color: #28a9e5;
-        border-right-color: #32b2ec;
-        border-bottom-color: #8b6ee4;
+        border: 3px solid rgba(20, 157, 240, 0.18);
+        border-top-color: #68d8ff;
+        border-right-color: #22b8fa;
+        border-bottom-color: #0e84de;
         border-radius: 50%;
         animation: splash-spin 0.9s linear infinite;
       }

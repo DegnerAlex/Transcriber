@@ -34,13 +34,17 @@ DIST_APPIMAGE = $(DIST)/Transcriber-$(VERSION)-linux-x86_64.AppImage
 # are serialized with flock: parallel invocations wait instead of racing.
 LOCK := /tmp/transcriber-build.lock
 
-.PHONY: help appimage dev clean clean-all release upload
+# Shorthand: every Rust-side command runs inside the transcriber container,
+# serialized by the build lock.
+RUN = flock $(LOCK) docker compose run --rm transcriber
+
+.PHONY: help appimage dev clean-all clean-docker release upload
 
 help:
 	@echo "make appimage  - desktop AppImage (models + CUDA runtime bundle)"
 	@echo "make dev           - dev environment (frontend + cargo tauri dev)"
-	@echo "make clean         - remove debug build caches (release kept)"
-	@echo "make clean-all     - remove the whole target directory"
+	@echo "make clean-all     - all builds (debug, release, dist) + docker cleanup + prune"
+	@echo "make clean-docker  - remove transcriber containers, images and volumes"
 	@echo "make release       - publish the AppImage as a GitHub release (gh)"
 	@echo "make upload        - re-upload the artifact to the existing release"
 
@@ -48,8 +52,8 @@ help:
 # models (all ggml files from models/) bundled next to the binary. The CUDA
 # runtime libs are added by linuxdeploy automatically.
 appimage:
-	flock $(LOCK) docker compose run --rm transcriber sh -c "cd /srv/src-tauri && cargo tauri build --bundles appimage"
-	flock $(LOCK) docker compose run --rm transcriber sh -c "\
+	$(RUN) sh -c "cd /srv/src-tauri && cargo tauri build --bundles appimage"
+	$(RUN) sh -c "\
 	  cd /srv/src-tauri/target/release/bundle/appimage && \
 	  rm -rf squashfs-root && \
 	  ./Transcriber_$(VERSION)_amd64.AppImage --appimage-extract >/dev/null && \
@@ -65,27 +69,44 @@ appimage:
 dev:
 	docker compose up frontend transcriber
 
-# Remove the debug build caches. Runs in the container because the build
-# files are created by root; release artifacts are kept.
-clean:
-	flock $(LOCK) docker compose run --rm transcriber sh -c "rm -rf /srv/src-tauri/target/debug /srv/src-tauri/target/*/debug"
+# Docker cleanup for this project: containers (dev + one-off run sessions),
+# networks, project images and volumes (models and caches are re-downloaded
+# on the next build).
+clean-docker:
+	@echo ">> removing containers, networks and volumes"
+	docker compose down --remove-orphans --volumes 2>/dev/null || true
+	docker rm -f $$(docker ps -aq --filter "name=transcriber") 2>/dev/null || true
+	@echo ">> removing project images"
+	docker rmi -f $$(docker images -q "transcriber-*") 2>/dev/null || true
 
-# Remove the whole target directory: the next build recompiles everything.
-clean-all:
-	flock $(LOCK) docker compose run --rm transcriber sh -c "rm -rf /srv/src-tauri/target"
+# Full wipe: the whole target directory plus the docker resources of this
+# project (reuses clean-docker), then a complete docker system prune — all
+# unused images, stopped containers, networks and the build cache. Affects
+# the whole docker host, not just this project. Everything re-downloads on
+# the next build.
+clean:
+	$(RUN) sh -c "rm -rf /srv/src-tauri/target"
+	rm -rf $(DIST) $(TAURI_DIR)/target/release/bundle/appimage/squashfs-root
+	$(MAKE) --no-print-directory clean-docker
+	@echo ">> full docker system prune (all unused images + build cache)"
+	docker system prune -af 2>/dev/null || true
+	@echo ">> disk usage after cleanup:"
+	@docker system df
+
+# The dist/ folder for the release artifacts (created on demand).
+$(DIST):
+	mkdir -p $(DIST)
 
 # Copy the release artifact to dist/ with a clean name and publish it as a
 # GitHub release (tag v$(VERSION) is created at the current HEAD). Requires
 # the gh CLI logged in (`gh auth login`). Run `make appimage` first so the
 # artifact exists.
-release:
-	@mkdir -p $(DIST)
+release: | $(DIST)
 	gh release create v$(VERSION) "$(APPIMAGE_FILE)" \
 		--title "Transcriber $(VERSION)" --generate-notes
 	@echo "Release v$(VERSION) published."
 
 # Re-upload the artifact to the existing release, replacing the old file.
-upload:
-	@mkdir -p $(DIST)
+upload: | $(DIST)
 	gh release upload v$(VERSION) "$(APPIMAGE_FILE)" --clobber
 	@echo "Artifact uploaded to release v$(VERSION)."
