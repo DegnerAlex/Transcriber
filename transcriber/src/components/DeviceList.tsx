@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { Component } from "preact/compat";
+import { FaCheck, FaMicrophone, FaRotate, FaVolumeHigh } from "react-icons/fa6";
 
 interface AudioInputConfig {
   channels: number;
@@ -51,7 +52,40 @@ interface DeviceListProps {
   onToggleOutput: (device: AudioOutputDevice) => void;
 }
 
-/** The list of audio input devices; clicking a row toggles its selection. */
+/** Drops empty and "unknown"-style values from a device fact list. */
+function meaningful(values: Array<string | null | undefined>): string[] {
+  return values.filter((part): part is string => {
+    const value = (part ?? "").trim();
+    return value.length > 0 && !/^(unknown|n\/a|-)$/i.test(value);
+  });
+}
+
+/** Joins the meaningful device facts, skipping empty and "unknown" ones. */
+function metaLine(device: AudioInputDevice): string {
+  return meaningful([
+    device.driver ?? device.interface,
+    device.manufacturer,
+    configSummary(device.defaultConfig),
+  ]).join(" · ");
+}
+
+/** Meta line for an output device. */
+function outputMetaLine(device: AudioOutputDevice): string {
+  return meaningful([device.interface, device.deviceType]).join(" · ");
+}
+
+/** Human-readable capture configuration, e.g. `2 ch · 48 kHz · f32`. */
+function configSummary(config: AudioInputConfig | null): string {
+  if (!config) return "";
+  const parts = [
+    `${config.channels} ch`,
+    `${Math.round(config.sampleRate / 1000)} kHz`,
+    config.sampleFormat,
+  ];
+  return parts.join(" · ");
+}
+
+/** The audio device lists: input devices and capturable output sinks. */
 export class DeviceList extends Component<DeviceListProps> {
   render() {
     const {
@@ -67,27 +101,25 @@ export class DeviceList extends Component<DeviceListProps> {
 
     return (
       <div className="devices-section">
-        <div className="level is-mobile mb-1">
-          <div className="level-left">
-            <span className="has-text-weight-semibold is-size-6">Audio Input</span>
-          </div>
-          <div className="level-right">
-            <button
-              type="button"
-              className="button is-small refresh-button"
-              onClick={onRefresh}
-            >
-              Refresh
-            </button>
-          </div>
+        <div className="section-header">
+          <span className="section-label">Audio input</span>
+          <button
+            type="button"
+            className="button is-small refresh-button"
+            onClick={onRefresh}
+            title="Re-enumerate devices"
+          >
+            <FaRotate />
+          </button>
         </div>
+
         {error && (
-          <p className="notification is-danger is-light">
+          <p className="notification is-danger is-light py-1 px-2 is-size-7">
             Error: {error}
           </p>
         )}
         {!error && devices.length === 0 && (
-          <p className="has-text-grey">No devices found</p>
+          <p className="device-empty">No devices found</p>
         )}
 
         <ul className="device-list device-list-scroll">
@@ -103,24 +135,35 @@ export class DeviceList extends Component<DeviceListProps> {
                 className={"device-item" + (isSelected ? " is-selected" : "")}
                 onClick={() => onToggle(device)}
               >
-                <div className="device-line">
-                  <span className="subtitle is-6 mb-0">
+                <span className="device-icon">
+                  <FaMicrophone />
+                </span>
+                <span className="device-info">
+                  <span className="device-name">
                     {device.name === "default_input"
                       ? "System default input"
                       : device.name}
                   </span>
-                  {device.isDefault && (
-                    <span className="tag is-info">default</span>
+                  {metaLine(device) && (
+                    <span className="device-meta">{metaLine(device)}</span>
                   )}
-                </div>
+                </span>
+                {device.isDefault && <span className="device-badge">default</span>}
+                {isSelected && (
+                  <span className="device-check">
+                    <FaCheck />
+                  </span>
+                )}
               </li>
             );
           })}
         </ul>
 
         {outputs.length > 0 && (
-          <div className="mt-5">
-            <div className="has-text-weight-semibold mb-1">Audio output</div>
+          <div className="mt-4">
+            <div className="section-header">
+              <span className="section-label">Audio output</span>
+            </div>
             <ul className="device-list">
               {outputs.map((device) => {
                 const isSelected = selectedOutput === device.name;
@@ -131,18 +174,29 @@ export class DeviceList extends Component<DeviceListProps> {
                     className={"device-item" + (isSelected ? " is-selected" : "")}
                     onClick={() => onToggleOutput(device)}
                   >
-                    <div className="device-line">
-                      <span className="subtitle is-6 mb-0">
+                    <span className="device-icon">
+                      <FaVolumeHigh />
+                    </span>
+                    <span className="device-info">
+                      <span className="device-name">
                         {device.name === "default_sink"
                           ? "System default output"
                           : device.name === "default_input"
                               ? "System default input"
                               : device.name}
                       </span>
-                      {device.isDefault && (
-                        <span className="tag is-info">default</span>
+                      {outputMetaLine(device) && (
+                        <span className="device-meta">
+                          {outputMetaLine(device)}
+                        </span>
                       )}
-                    </div>
+                    </span>
+                    {device.isDefault && <span className="device-badge">default</span>}
+                    {isSelected && (
+                      <span className="device-check">
+                        <FaCheck />
+                      </span>
+                    )}
                   </li>
                 );
               })}

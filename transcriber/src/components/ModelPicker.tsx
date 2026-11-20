@@ -171,6 +171,13 @@ export class ModelPicker extends Component<ModelPickerProps, ModelPickerState> {
                                 <button
                                     key={m.name}
                                     type="button"
+                                    title={
+                                        m.active
+                                            ? "Active model"
+                                            : "Load the " +
+                                              m.name.replace(/^ggml-/, "").replace(/\.bin$/, "") +
+                                              " model"
+                                    }
                                     disabled={switching}
                                     className={
                                         "button is-small" + (m.active ? " is-info" : " is-light")

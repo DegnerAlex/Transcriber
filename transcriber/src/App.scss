@@ -123,20 +123,36 @@ section.compact {
   }
 }
 
-.list-header {
-  font-weight: 600;
-}
-
 .devices-section {
   margin-top: 0.25rem;
 }
 
 // ---- Device lists ----
 
+.devices-section {
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.35rem;
+  }
+
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+}
+
 .device-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
 }
 
 // No inner scroll for the input list: the whole column scrolls with a
@@ -145,13 +161,15 @@ section.compact {
 }
 
 .device-item {
-  padding: 0.3rem 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background-color: $panel-fill;
+  border: 1px solid transparent;
   cursor: pointer;
-  border-bottom: 1px solid $hairline;
-
-  &:last-child {
-    border-bottom: none;
-  }
+  transition: background-color 0.12s ease, border-color 0.12s ease;
 
   &:hover {
     background-color: $hover-fill;
@@ -159,23 +177,70 @@ section.compact {
 
   &.is-selected {
     background-color: $selection-fill;
+    border-color: rgba(62, 142, 208, 0.6);
   }
 }
 
-.device-line {
+.device-icon {
+  display: inline-flex;
+  flex: none;
+  font-size: 0.85rem;
+  color: var(--bulma-text, inherit);
+  opacity: 0.75;
+
+  .device-item.is-selected & {
+    color: #3e8ed0;
+    opacity: 1;
+  }
+}
+
+.device-info {
   display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .device-name {
   font-weight: 600;
   font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .device-meta {
-  font-size: 0.72rem;
-  opacity: 0.75;
+  font-size: 0.7rem;
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-badge {
+  flex: none;
+  font-size: 0.62rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid $hairline-soft;
+  opacity: 0.8;
+}
+
+.device-check {
+  flex: none;
+  color: #3e8ed0;
+  display: inline-flex;
+}
+
+.device-empty {
+  font-size: 0.78rem;
+  opacity: 0.6;
+  padding: 0.5rem 0.6rem;
+}
+
+.refresh-button {
+  display: inline-flex;
+  align-items: center;
 }
 
 // ---- Live panel ----
@@ -183,12 +248,19 @@ section.compact {
 .waveform {
   width: 100%;
   height: 90px;
-  display: block;
   border-radius: 6px;
   background-color: rgba(127, 127, 127, 0.08);
 
   &.is-idle {
     opacity: 0.45;
+  }
+
+  canvas {
+    // `!important` beats the inline px sizes that pixi autoDensity writes on
+    // the canvas before the first real resize.
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
   }
 }
 
@@ -392,4 +464,40 @@ section.compact {
     width: 100%;
     text-align: left;
   }
+}
+
+// Chip showing the file the transcript is mirrored into.
+.file-row {
+  gap: 0.4rem;
+}
+
+.transcript-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: 12rem;
+  // Same height as the small Bulma buttons (e.g. the Clear button).
+  height: 2rem;
+  // The × button inside provides the right spacing, so the background does
+  // not stick out past it.
+  padding: 0 0 0 0.5rem;
+  border-radius: 6px;
+  background-color: $panel-fill;
+  font-size: 0.68rem;
+  color: inherit;
+}
+
+.transcript-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.icon-button.is-tiny {
+  height: 100%;
+  padding: 0 0.35rem 0 0.1rem;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.7rem;
 }

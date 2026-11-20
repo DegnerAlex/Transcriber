@@ -37,8 +37,23 @@ fn debug_log(message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKit's DMABUF renderer hangs WebGL context creation on native
+    // Wayland; keep accelerated compositing but use the shared-memory path
+    // instead, so pixi.js (the waveform) initializes reliably. Only applied
+    // when the user has not chosen a value explicitly.
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+        && std::env::var_os("WAYLAND_DISPLAY").is_some()
+    {
+        // SAFETY: single-threaded at this point — the GTK/WebKit environment
+        // is read later, when tauri initializes its event loop.
+        unsafe {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(audio::AudioMonitor::default())
         .manage(std::sync::Arc::new(whisper::WhisperEngine::new()))
         .setup(|app| {
@@ -66,6 +81,8 @@ pub fn run() {
             transcription::list_available_models,
             transcription::save_transcript,
             transcription::load_transcript,
+            transcription::pick_transcript_file,
+            transcription::write_transcript_file,
             transcription::save_settings,
             transcription::load_settings,
             transcription::select_transcription_model,

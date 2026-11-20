@@ -128,6 +128,9 @@ export class LanguagePicker extends Component<LanguagePickerProps, LanguagePicke
                                 <button
                                     key={value}
                                     type="button"
+                                    title={
+                                        "Transcription language: " + label
+                                    }
                                     className={
                                         "button is-small" +
                                         (language === value ? " is-info" : " is-light")

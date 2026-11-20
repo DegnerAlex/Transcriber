@@ -19,7 +19,8 @@
     "react-icons": "^5.7.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.5.0",
-    "bulma": "^1.0.4"
+    "bulma": "^1.0.4",
+    "pixi.js": "^8.23.0"
   },
   "productName": null
 }

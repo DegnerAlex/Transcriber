@@ -12,7 +12,8 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 - **Input devices** — microphones and other capture devices (ALSA host via cpal; ALSA routes are collapsed per physical device, preferring `plughw`);
 - **Output devices** — speakers, headsets, HDMI: select a sink and the app captures whatever is playing through it (PipeWire host, monitor capture) — useful for transcribing calls, videos, meetings;
 - Hot-plug friendly: devices plugged in after the app starts appear after pressing Refresh (bind-mounted `/dev/snd` + a device-cgroup rule for the whole ALSA major);
-- A live oscilloscope (canvas waveform) of the currently monitored stream.
+- A live oscilloscope of the currently monitored stream, rendered on the
+  GPU with pixi.js.
 
 ### Transcription
 
@@ -20,7 +21,7 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 - **Live drafts**: while you are still speaking, a partial transcription of the growing phrase is shown on top of the chat (updated every ~2 s);
 - **Chat-style transcript**: each finalized utterance is a message in a full-height chat column; newest on top, with auto-scroll;
 - **Language selection** — every language the loaded model supports, plus `auto` (see the table below);
-- **On-the-fly model switching** — every `ggml` model found in `models/` is available as a chip in the UI; switching reloads the whisper context without restarting the app (~1 s);
+- **On-the-fly model switching** — every `ggml` model found in `models/` is available as a chip in the UI;
 - **Supported models** — any `ggml` file in `models/`: tiny/base/small/medium/large (incl. quantized q5_0/q5_1/q8_0 variants and large-v3-turbo); switching reloads the whisper context without restarting the app (~1 s).
 
 ### Text insertion
@@ -28,6 +29,10 @@ A desktop app that turns speech into text: talk into your microphone — or capt
 - **Auto-insert** — each finalized phrase is typed into whatever application has focus (enigo, X11 XTest); suppressed while the Transcriber window itself is focused, so text never ends up in the app's own UI;
 - **Insert on/off** toggle persisted across restarts;
 - **Copy to clipboard** — the whole transcript in chronological order (native clipboard plugin with web-API and `execCommand` fallbacks);
+- **Mirror to file** — pick a `.txt` file via the native save dialog and the
+  transcript is continuously written there (one utterance per line); the
+  choice is remembered across restarts and can be unlinked with a single
+  click;
 - Transcription errors are surfaced as inline notifications.
 
 ### Supported languages
@@ -79,7 +84,7 @@ On unsupported GPUs the app runs on the CPU automatically (see GPU acceleration 
 Everything survives app restarts and container recreation:
 
 - the selected device (the capture monitor auto-resumes on startup),
-- sensitivity, language, model, the Insert toggle,
+- sensitivity, language, model, the Insert toggle, the transcript mirror file,
 - the whole transcript chat (stored in `transcript.json` inside the app data directory, which is bind-mounted from the host),
 - the chat is not cleared by auto-insert — only by the **Clear** button.
 
@@ -125,19 +130,21 @@ The AppImage requires only the NVIDIA driver (CUDA path) or a Vulkan driver (RAD
 
 **Frontend**
 
-- [React](https://react.dev/) 19 + [TypeScript](https://www.typescriptlang.org/) — UI (class-based root component)
+- [Preact](https://preactjs.com/) + `preact/compat` + [TypeScript](https://www.typescriptlang.org/) — UI (class-based root component)
 - [Vite](https://vite.dev/) — dev server and bundler
 - [Bulma](https://bulma.io/) — CSS framework (light and dark themes via `data-theme`)
 - [react-icons](https://github.com/react-icons/react-icons) — Font Awesome SVG icons
+- [pixi.js](https://pixijs.com/) 8 — GPU rendering of the audio waveform
+  (`src/components/WaveformRenderer.ts`)
 - [@tauri-apps/api](https://v2.tauri.app/reference/javascript/api/) + [@tauri-apps/plugin-clipboard-manager](https://v2.tauri.app/reference/javascript/clipboard/) — IPC and native clipboard writes
 
 **Rust / Tauri**
 
 - [Tauri v2](https://v2.tauri.app/) — application framework (window, IPC, events)
-- [tauri-plugin-opener](https://v2.tauri.app/plugin/opener/) — URL/file opening
 - [tauri-plugin-clipboard-manager](https://v2.tauri.app/plugin/clipboard-manager/) — native clipboard writes (WebKit blocks the web Clipboard API)
+- [tauri-plugin-dialog](https://v2.tauri.app/plugin/dialog/) — native save dialog for the transcript mirror file
 - [cpal](https://github.com/RustAudio/cpal) — audio capture (ALSA host for inputs, PipeWire host for output/sink monitor capture)
-- [whisper-rs](https://github.com/thewh1teagle/whisper-rs) — whisper.cpp bindings (CUDA feature, ggml models)
+- [whisper-rs](https://github.com/thewh1teagle/whisper-rs) — whisper.cpp bindings (CUDA + Vulkan features, ggml models)
 - [enigo](https://github.com/enigo-rs/enigo) — keyboard input simulation (X11 XTest) for text insertion
 - [serde](https://serde.rs/) / [serde_json](https://github.com/serde-rs/json) — serialization for IPC and the transcript file
 - [rust-pipewire](https://gitlab.freedesktop.org/pipewire/pipewire-rs) / [alsa](https://github.com/diwic/alsa-rs) — pulled in through cpal's backends

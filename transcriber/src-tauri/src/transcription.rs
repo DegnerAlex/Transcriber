@@ -16,6 +16,7 @@
 //! whisper, plus commands for language and model selection.
 
 use std::sync::atomic::{AtomicU64, Ordering};
+use tauri_plugin_dialog::DialogExt;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -168,6 +169,36 @@ pub fn save_transcript(app: AppHandle, lines: Vec<String>) -> Result<(), String>
     let file = dir.join("transcript.json");
     let json = serde_json::to_string(&lines).map_err(|e| e.to_string())?;
     std::fs::write(file, json).map_err(|e| e.to_string())
+}
+
+
+/// Opens a native save dialog and returns the chosen transcript file path
+/// (`None` when the user cancels). Runs off the main thread because the
+/// blocking dialog would freeze the event loop.
+#[tauri::command]
+pub async fn pick_transcript_file(app: AppHandle) -> Option<String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .add_filter("Text file", &["txt"])
+            .set_file_name("transcript.txt")
+            .blocking_save_file()
+            .map(|file| file.to_string())
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Writes the transcript to a user-chosen file as plain text (one utterance
+/// per line). No-op for an empty transcript.
+#[tauri::command]
+pub fn write_transcript_file(path: String, lines: Vec<String>) -> Result<(), String> {
+    if lines.is_empty() {
+        return Ok(());
+    }
+    let text = lines.join("\n") + "\n";
+    std::fs::write(&path, text).map_err(|error| format!("cannot write {}: {error}", path))
 }
 
 /// Load the persisted transcript (empty when the file does not exist yet).

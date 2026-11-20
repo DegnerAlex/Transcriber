@@ -21,6 +21,7 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import {DeviceList} from "./components/DeviceList";
 import {LanguagePicker} from "./components/LanguagePicker";
 import {ModelPicker} from "./components/ModelPicker";
+import {TranscriptFilePicker} from "./components/TranscriptFilePicker";
 import {TranscriptChat} from "./components/TranscriptChat";
 import {InputToggle} from "./components/InputToggle";
 import {BackendBadge} from "./components/BackendBadge";
@@ -45,6 +46,8 @@ interface AppState {
     windowFocused: boolean;
     backend: string;
     transcriptLines: string[];
+    /** File the transcript is continuously written to; `null` = off. */
+    transcriptFile: string | null;
     partial: string | null;
     typeError: string | null;
     copied: boolean;
@@ -124,6 +127,7 @@ class App extends Component<Record<string, never>, AppState> {
         windowFocused: false,
         backend: "cpu",
         transcriptLines: [],
+        transcriptFile: null,
         partial: null,
         typeError: null,
         copied: false,
@@ -163,6 +167,10 @@ class App extends Component<Record<string, never>, AppState> {
                     gain: this.loadSetting<number>("translator.gain", 100),
                     autoType: this.loadSetting<boolean>("translator.autoType", true),
                     language: this.loadSetting<string>("translator.language", "auto"),
+                    transcriptFile: this.loadSetting<string | null>(
+                        "translator.transcriptFile",
+                        null,
+                    ),
                     savedModel: this.loadSetting<string | null>(
                         "translator.model",
                         null,
@@ -317,6 +325,7 @@ class App extends Component<Record<string, never>, AppState> {
                 "translator.transcriptLines",
                 this.state.transcriptLines,
             );
+            void this.writeTranscriptToFile();
             const chat = document.querySelector(".transcript-chat");
             const column = document.querySelector(".app-column-left");
             const panel = document.querySelector(".live-panel");
@@ -513,6 +522,40 @@ class App extends Component<Record<string, never>, AppState> {
         this.saveSetting("translator.autoType", autoType);
     };
 
+    /** Opens a save dialog and starts mirroring the transcript into the
+     * chosen file. Unlinking with the × just stops the mirroring. */
+    private chooseTranscriptFile = async (): Promise<void> => {
+        try {
+            const path = await invoke<string | null>("pick_transcript_file");
+            if (!path) return;
+            this.setState({transcriptFile: path});
+            this.saveSetting("translator.transcriptFile", path);
+            await this.writeTranscriptToFile();
+        } catch (error) {
+            this.setState({typeError: String(error)});
+        }
+    };
+
+    private unlinkTranscriptFile = (): void => {
+        this.setState({transcriptFile: null});
+        this.saveSetting("translator.transcriptFile", null);
+    };
+
+    /** Mirrors the transcript into the chosen file (plain text, one line
+     *  per utterance). */
+    private writeTranscriptToFile = async (): Promise<void> => {
+        const {transcriptFile, transcriptLines} = this.state;
+        if (!transcriptFile || transcriptLines.length === 0) return;
+        try {
+            await invoke("write_transcript_file", {
+                path: transcriptFile,
+                lines: transcriptLines,
+            });
+        } catch (error) {
+            this.setState({typeError: String(error)});
+        }
+    };
+
     private copyTranscript = async (): Promise<void> => {
         const lines = this.state.transcriptLines;
         if (lines.length === 0) return;
@@ -575,6 +618,7 @@ class App extends Component<Record<string, never>, AppState> {
             autoType,
             backend,
             transcriptLines,
+            transcriptFile,
             partial,
             typeError,
             copied,
@@ -617,7 +661,12 @@ class App extends Component<Record<string, never>, AppState> {
                         </div>
                     <div className="is-flex is-justify-content-space-between is-align-items-center mb-1 mt-3">
                         <div className="is-size-7 has-text-weight-semibold">Transcript</div>
-                        <div className="is-flex is-align-items-center">
+                        <div className="is-flex is-align-items-center file-row">
+                            <TranscriptFilePicker
+                                file={transcriptFile}
+                                onPick={() => void this.chooseTranscriptFile()}
+                                onUnlink={this.unlinkTranscriptFile}
+                            />
                             <button
                                 type="button"
                                 className="button is-small is-light mr-2"
