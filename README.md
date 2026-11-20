@@ -2,7 +2,7 @@
 
 A desktop app that turns speech into text: talk into your microphone — or capture the audio playing through a system output device — and the recognized text is automatically typed into whatever application has focus. 
 
-<img width="800" height="600" alt="image" src="https://github.com/user-attachments/assets/1e73a37a-aea1-4a34-aef6-7b30cba8f041" />
+<img width="800" height="600" alt="image" src="https://github.com/user-attachments/assets/bff57a74-23d5-45fd-8f52-4155ad219d61" />
 
 
 ## Features
