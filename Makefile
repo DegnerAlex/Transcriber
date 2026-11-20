@@ -43,7 +43,7 @@ RUN = flock $(LOCK) docker compose run --rm transcriber
 help:
 	@echo "make appimage  - desktop AppImage (models + CUDA runtime bundle)"
 	@echo "make dev           - dev environment (frontend + cargo tauri dev)"
-	@echo "make clean-all     - all builds (debug, release, dist) + docker cleanup + prune"
+	@echo "make clean         - remove all builds + docker resources of the project"
 	@echo "make clean-docker  - remove transcriber containers, images and volumes"
 	@echo "make release       - publish the AppImage as a GitHub release (gh)"
 	@echo "make upload        - re-upload the artifact to the existing release"
@@ -79,19 +79,14 @@ clean-docker:
 	@echo ">> removing project images"
 	docker rmi -f $$(docker images -q "transcriber-*") 2>/dev/null || true
 
-# Full wipe: the whole target directory plus the docker resources of this
-# project (reuses clean-docker), then a complete docker system prune — all
-# unused images, stopped containers, networks and the build cache. Affects
-# the whole docker host, not just this project. Everything re-downloads on
-# the next build.
-clean:
-	$(RUN) sh -c "rm -rf /srv/src-tauri/target"
+# Full wipe: all builds (debug and release), the dist/ copies and the
+# AppImage repack leftovers, plus every docker resource of this project
+# (inherits clean-docker). Files created by a root-owned container may need
+# sudo to remove; without a running docker daemon the docker steps are
+# skipped gracefully.
+clean: clean-docker
+	rm -rf $(TAURI_DIR)/target
 	rm -rf $(DIST) $(TAURI_DIR)/target/release/bundle/appimage/squashfs-root
-	$(MAKE) --no-print-directory clean-docker
-	@echo ">> full docker system prune (all unused images + build cache)"
-	docker system prune -af 2>/dev/null || true
-	@echo ">> disk usage after cleanup:"
-	@docker system df
 
 # The dist/ folder for the release artifacts (created on demand).
 $(DIST):
